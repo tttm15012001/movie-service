@@ -93,8 +93,8 @@ jobs:
           
       - name: Force ECS task restart (stop current task)
         env:
-          CLUSTER_NAME: ryanmovie-cluster
-          SERVICE_NAME: ryanmovie-service
+          CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+          SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
         run: |
           set -euo pipefail
           echo "Fetching current running task for $SERVICE_NAME in $CLUSTER_NAME ..."
