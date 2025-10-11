@@ -91,7 +91,7 @@ jobs:
           echo " - $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo " - $ECR_REGISTRY/$ECR_REPOSITORY:latest"
           
-      # 🚀 Force ECS service redeploy (no downtime)
+      # Force ECS service redeploy (no downtime)
       - name: Force new deployment in ECS
         env:
           CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -103,4 +103,4 @@ jobs:
             --cluster "$CLUSTER_NAME" \
             --service "$SERVICE_NAME" \
             --force-new-deployment
-          echo "✅ ECS service redeployment triggered successfully."
+          echo "ECS service redeployment triggered successfully."
