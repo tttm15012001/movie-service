@@ -91,27 +91,16 @@ jobs:
           echo " - $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo " - $ECR_REGISTRY/$ECR_REPOSITORY:latest"
           
-      - name: Force ECS task restart (stop current task)
+      # 🚀 Force ECS service redeploy (no downtime)
+      - name: Force new deployment in ECS
         env:
           CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
           SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
         run: |
           set -euo pipefail
-          echo "Fetching current running task for $SERVICE_NAME in $CLUSTER_NAME ..."
-          task_arn=$(aws ecs list-tasks \
+          echo "Forcing ECS redeployment for service $SERVICE_NAME in cluster $CLUSTER_NAME ..."
+          aws ecs update-service \
             --cluster "$CLUSTER_NAME" \
-            --service-name "$SERVICE_NAME" \
-            --desired-status RUNNING \
-            --query 'taskArns[0]' \
-            --output text)
-
-          if [ "$task_arn" = "None" ] || [ -z "$task_arn" ]; then
-            echo "⚠️  No running tasks found for $SERVICE_NAME — skipping stop."
-          else
-            echo "Stopping current task: $task_arn"
-            aws ecs stop-task \
-              --cluster "$CLUSTER_NAME" \
-              --task "$task_arn" \
-              --reason "Deploy new image from GitHub Actions"
-            echo "✅ Task stopped. ECS will automatically start a new task using the latest image."
-          fi
+            --service "$SERVICE_NAME" \
+            --force-new-deployment
+          echo "✅ ECS service redeployment triggered successfully."
