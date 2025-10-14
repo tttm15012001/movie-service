@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -19,7 +20,30 @@ public class MovieResponseDto {
 
     private String title;
 
+    private String originalTitle;
+
     private String description;
+
+    @JsonSerialize(using = CustomDateFormat.class)
+    private Date manufacturingDate;
+
+    private Float rateScore;
+
+    private Integer reviewQuantity;
+
+    private Integer duration;
+
+    private List<String> genre;
+
+    private String country;
+
+    private String director;
+
+    private List<String> cast;
+
+    private String episodes;
+
+    private String status;
 
     @JsonSerialize(using = CustomDateFormat.class)
     private Date releaseDate;
