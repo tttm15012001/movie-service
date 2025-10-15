@@ -5,6 +5,7 @@ import com.ryanmovie.dto.response.CategoryResponseDto;
 import com.ryanmovie.model.entity.CategoryModel;
 import com.ryanmovie.repository.CategoryRepository;
 import com.ryanmovie.service.CategoryService;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -25,9 +26,17 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
-    public List<CategoryModel> findTopScoreCategory(int top) {
+    public CategoryResponseDto getCategoryById(Long categoryId) {
+        this.categoryRepository.findById(categoryId);
+    }
+
+    @Override
+    public List<CategoryResponseDto> findTopScoreCategory(int top) {
         Pageable pageable = PageRequest.of(0, top);
-        return this.categoryRepository.findAllByOrderByScoreDesc(pageable);
+        return this.categoryRepository.findAllByOrderByScoreDesc(pageable)
+                .stream()
+                .map(CategoryModel::toCategoryResponseDto)
+                .toList();
     }
 
     @Override

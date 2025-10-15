@@ -2,7 +2,6 @@ package com.ryanmovie.model.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ryanmovie.dto.response.CastResponseDto;
-import com.ryanmovie.dto.response.MovieResponseDto;
 import jakarta.persistence.Id;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -19,7 +18,6 @@ import lombok.EqualsAndHashCode;
 
 import java.util.Date;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_CAST;

@@ -1,10 +1,14 @@
 package com.ryanmovie.model.entity;
 
+import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_CATEGORY;
+
 import com.ryanmovie.dto.response.CategoryResponseDto;
 import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -14,6 +18,8 @@ import lombok.AllArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = TABLE_CATEGORY)
 public class CategoryModel {
 
     @Id
