@@ -1,11 +1,13 @@
 package com.ryanmovie.service.impl;
 
+import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_CATEGORY;
+
 import com.ryanmovie.dto.request.CategoryRequest;
 import com.ryanmovie.dto.response.CategoryResponseDto;
 import com.ryanmovie.model.entity.CategoryModel;
 import com.ryanmovie.repository.CategoryRepository;
 import com.ryanmovie.service.CategoryService;
-import java.util.stream.Collectors;
+import com.ryanmovie.validation.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -27,7 +29,9 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public CategoryResponseDto getCategoryById(Long categoryId) {
-        this.categoryRepository.findById(categoryId);
+        return this.categoryRepository.findById(categoryId)
+                .map(CategoryModel::toCategoryResponseDto)
+                .orElseThrow(() -> new NotFoundException(TABLE_CATEGORY, categoryId));
     }
 
     @Override
