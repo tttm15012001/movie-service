@@ -21,7 +21,9 @@ import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
-import java.util.*;
+import java.util.Base64;
+import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 public class MovieController implements MovieApi {
