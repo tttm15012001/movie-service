@@ -1,6 +1,9 @@
 package com.ryanmovie.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ryanmovie.model.entity.CategoryEnum;
 import com.ryanmovie.model.entity.Genre;
+import com.ryanmovie.model.entity.MovieStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,7 +11,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
 
 @Data
 @Builder
@@ -22,6 +24,7 @@ public class MovieRequest {
 
     private String description;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private Date manufacturingDate;
 
     private Float rateScore;
@@ -32,15 +35,18 @@ public class MovieRequest {
 
     private List<Genre> genre;
 
+    private List<CategoryEnum> categories;
+
     private String country;
 
     private String director;
 
-    private Set<Long> castIds;
+    private List<String> casts;
 
-    private String episodes;
+    private Integer episodes;
 
-    private String status;
+    private MovieStatus status;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private Date releaseDate;
 }

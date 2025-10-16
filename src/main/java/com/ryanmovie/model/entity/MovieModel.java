@@ -1,35 +1,18 @@
 package com.ryanmovie.model.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.ryanmovie.dto.response.MovieResponseDto;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.JoinColumn;
+import com.ryanmovie.utils.StringUtil;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
-import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_MOVIE;
 
@@ -74,10 +57,22 @@ public class MovieModel {
     @Column(name = "duration")
     protected Integer duration;
 
-    @ElementCollection(targetClass = Genre.class)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "movie_genre_mapping",
+            joinColumns = @JoinColumn(name = "movie_id")
+    )
     @Enumerated(EnumType.STRING)
     @Column(name = "genre")
     protected List<Genre> genre;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "movie_category_mapping",
+            joinColumns = @JoinColumn(name = "movie_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    private List<CategoryModel> categories;
 
     @Column(name = "country")
     protected String country;
@@ -85,22 +80,15 @@ public class MovieModel {
     @Column(name = "director")
     protected String director;
 
-    @ManyToMany
-    @JoinTable(
-            name = "movie_cast_mapping",
-            joinColumns = @JoinColumn(name = "movie_id"),
-            inverseJoinColumns = @JoinColumn(name = "cast_id")
-    )
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @JsonIgnore
-    private Set<CastModel> cast = new HashSet<>();
+    @Column(name = "casts")
+    private String casts;
 
     @Column(name = "episodes")
-    protected String episodes;
+    protected Integer episodes;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    protected String status;
+    protected MovieStatus status;
 
     @Column(name = "release_date")
     protected Date releaseDate;
@@ -129,13 +117,14 @@ public class MovieModel {
                             .map(Genre::getVietnameseName)
                             .toList()
                         : List.of())
-                .country(this.getCountry())
-                .director(this.getDirector())
-                .cast(this.cast != null
-                        ? this.cast.stream()
-                            .map(CastModel::getName)
+                .categories(this.categories != null
+                        ? this.categories.stream()
+                            .map(CategoryModel::getName)
                             .toList()
                         : List.of())
+                .country(this.getCountry())
+                .director(this.getDirector())
+                .casts(StringUtil.convertStringToList(this.casts))
                 .episodes(this.getEpisodes())
                 .status(this.getStatus())
                 .description(this.getDescription())

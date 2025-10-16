@@ -2,17 +2,18 @@ package com.ryanmovie.service.impl;
 
 import com.ryanmovie.dto.request.MovieRequest;
 import com.ryanmovie.dto.response.MovieResponseDto;
-import com.ryanmovie.model.entity.CastModel;
+import com.ryanmovie.model.entity.CategoryModel;
 import com.ryanmovie.model.entity.MovieModel;
-import com.ryanmovie.repository.CastRepository;
+import com.ryanmovie.repository.CategoryRepository;
 import com.ryanmovie.repository.MovieRepository;
 import com.ryanmovie.service.MovieService;
+import com.ryanmovie.utils.StringUtil;
 import com.ryanmovie.validation.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
+import java.util.Optional;
 
 import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_MOVIE;
 
@@ -21,29 +22,29 @@ import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_MOVIE;
 public class MovieServiceImpl implements MovieService {
     private final MovieRepository movieRepository;
 
-    private final CastRepository castRepository;
+    private final CategoryRepository categoryRepository;
 
     public MovieServiceImpl(
             MovieRepository movieRepository,
-            CastRepository castRepository
+            CategoryRepository categoryRepository
     ) {
         this.movieRepository = movieRepository;
-        this.castRepository = castRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     @Override
     public MovieResponseDto getMovieById(Long movieId) {
-        return this.movieRepository.findById(movieId)
+        return this.movieRepository.findMovieByIdWithCategories(movieId)
                 .map(MovieModel::toMovieResponseDto)
                 .orElseThrow(() -> new NotFoundException(TABLE_MOVIE, movieId));
     }
 
     @Override
     public MovieResponseDto createMovie(MovieRequest movieRequest) {
-        Set<CastModel> castModels = new HashSet<>();
-        if (movieRequest.getCastIds() != null && !movieRequest.getCastIds().isEmpty()) {
-            castModels = new HashSet<>(castRepository.findAllById(movieRequest.getCastIds()));
-        }
+        List<CategoryModel> categoryModels = movieRequest.getCategories().stream()
+                .map(code -> categoryRepository.findByCode(code)
+                        .orElseThrow(() -> new NotFoundException("category", code.toString())))
+                .toList();
 
         MovieModel movieModel = MovieModel.builder()
                 .title(movieRequest.getTitle())
@@ -53,9 +54,10 @@ public class MovieServiceImpl implements MovieService {
                 .reviewQuantity(movieRequest.getReviewQuantity())
                 .duration(movieRequest.getDuration())
                 .genre(movieRequest.getGenre())
+                .categories(categoryModels)
                 .country(movieRequest.getCountry())
                 .director(movieRequest.getDirector())
-                .cast(castModels)
+                .casts(StringUtil.convertListToString(movieRequest.getCasts()))
                 .episodes(movieRequest.getEpisodes())
                 .status(movieRequest.getStatus())
                 .releaseDate(movieRequest.getReleaseDate())
