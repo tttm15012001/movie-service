@@ -26,6 +26,10 @@ public class CategoryModel {
     @Column(name = "name")
     protected String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "code")
+    protected CategoryEnum code;
+
     @Column(name = "score")
     protected Float score;
 
@@ -36,6 +40,7 @@ public class CategoryModel {
         return CategoryResponseDto.builder()
                 .id(this.id)
                 .name(this.name)
+                .code(this.code)
                 .score(this.score)
                 .build();
     }

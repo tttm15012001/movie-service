@@ -12,4 +12,6 @@ public interface CategoryService {
     List<CategoryResponseDto> findTopScoreCategory(int top);
 
     CategoryResponseDto createCategory(CategoryRequest categoryRequest);
+
+    List<CategoryResponseDto> createCategories(List<CategoryRequest> categoryRequests);
 }

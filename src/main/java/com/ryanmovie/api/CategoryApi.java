@@ -6,6 +6,7 @@ import com.ryanmovie.dto.request.CategoryRequest;
 import com.ryanmovie.dto.response.CategoryResponseDto;
 import java.util.List;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RequestMapping(CATEGORY_API_URL)
@@ -18,4 +19,7 @@ public interface CategoryApi {
 
     @PostMapping(value = "/new", produces = MediaType.APPLICATION_JSON_VALUE)
     CategoryResponseDto createCategory(@RequestBody CategoryRequest categoryRequest);
+
+    @PostMapping(value = "/multiple/new", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<List<CategoryResponseDto>> createCategories(@RequestBody List<CategoryRequest> categoryRequest);
 }

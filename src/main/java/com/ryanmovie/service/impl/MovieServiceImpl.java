@@ -42,8 +42,8 @@ public class MovieServiceImpl implements MovieService {
     @Override
     public MovieResponseDto createMovie(MovieRequest movieRequest) {
         List<CategoryModel> categoryModels = movieRequest.getCategories().stream()
-                .map(name -> categoryRepository.findByName(name)
-                        .orElseThrow(() -> new NotFoundException("category", name)))
+                .map(code -> categoryRepository.findByCode(code)
+                        .orElseThrow(() -> new NotFoundException("category", code.toString())))
                 .toList();
 
         MovieModel movieModel = MovieModel.builder()

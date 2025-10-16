@@ -6,7 +6,9 @@ import com.ryanmovie.dto.response.CategoryResponseDto;
 import com.ryanmovie.service.CategoryService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -32,5 +34,11 @@ public class CategoryController implements CategoryApi {
     @Override
     public CategoryResponseDto createCategory(CategoryRequest categoryRequest) {
         return this.categoryService.createCategory(categoryRequest);
+    }
+
+    @Override
+    public ResponseEntity<List<CategoryResponseDto>> createCategories(@RequestBody List<CategoryRequest> categoryRequests) {
+        List<CategoryResponseDto> response = categoryService.createCategories(categoryRequests);
+        return ResponseEntity.ok(response);
     }
 }

@@ -3,7 +3,8 @@
 -- -----------------------------
 CREATE TABLE category (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255),
+    name VARCHAR(100),
+    code VARCHAR(100),
     score FLOAT
 );
 
@@ -17,7 +18,7 @@ CREATE TABLE movie (
     title VARCHAR(255),
     original_title VARCHAR(255),
     description TEXT,
-    manufacturing_date DATETIME,
+    manufacturing_date DATE,
     rate_score FLOAT,
     review_quantity INT,
     duration INT,
@@ -26,7 +27,7 @@ CREATE TABLE movie (
     casts TEXT,
     episodes INT,
     status VARCHAR(255),
-    release_date DATETIME
+    release_date DATE
 );
 
 -- -----------------------------

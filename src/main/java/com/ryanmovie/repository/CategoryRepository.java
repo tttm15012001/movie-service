@@ -1,5 +1,6 @@
 package com.ryanmovie.repository;
 
+import com.ryanmovie.model.entity.CategoryEnum;
 import com.ryanmovie.model.entity.CategoryModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -13,5 +14,5 @@ public interface CategoryRepository extends JpaRepository<CategoryModel, Long> {
 
     List<CategoryModel> findAllByOrderByScoreDesc(Pageable pageable);
 
-    Optional<CategoryModel> findByName(String name);
+    Optional<CategoryModel> findByCode(CategoryEnum code);
 }

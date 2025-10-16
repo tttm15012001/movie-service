@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -47,9 +48,27 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryResponseDto createCategory(CategoryRequest categoryRequest) {
         CategoryModel categoryModel = CategoryModel.builder()
                 .name(categoryRequest.getName())
+                .code(categoryRequest.getCode())
                 .score(categoryRequest.getScore())
                 .build();
 
         return this.categoryRepository.save(categoryModel).toCategoryResponseDto();
+    }
+
+    @Override
+    public List<CategoryResponseDto> createCategories(List<CategoryRequest> categoryRequests) {
+        List<CategoryModel> categoryModels = categoryRequests.stream()
+                .map(req -> CategoryModel.builder()
+                        .name(req.getName())
+                        .code(req.getCode())
+                        .score(req.getScore())
+                        .build())
+                .collect(Collectors.toList());
+
+        List<CategoryModel> saved = categoryRepository.saveAll(categoryModels);
+
+        return saved.stream()
+                .map(CategoryModel::toCategoryResponseDto)
+                .collect(Collectors.toList());
     }
 }
