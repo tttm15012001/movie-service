@@ -1,6 +1,7 @@
 package com.ryanmovie.dto.request;
 
 import com.ryanmovie.model.entity.Genre;
+import com.ryanmovie.model.entity.MovieStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,7 +9,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
 
 @Data
 @Builder
@@ -32,15 +32,17 @@ public class MovieRequest {
 
     private List<Genre> genre;
 
+    private List<String> categories;
+
     private String country;
 
     private String director;
 
-    private Set<Long> castIds;
+    private List<String> casts;
 
-    private String episodes;
+    private Integer episodes;
 
-    private String status;
+    private MovieStatus status;
 
     private Date releaseDate;
 }

@@ -6,10 +6,7 @@ import com.ryanmovie.dto.request.CategoryRequest;
 import com.ryanmovie.dto.response.CategoryResponseDto;
 import java.util.List;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.*;
 
 @RequestMapping(CATEGORY_API_URL)
 public interface CategoryApi {
@@ -20,5 +17,5 @@ public interface CategoryApi {
     List<CategoryResponseDto> getTopScoreCategory(int top);
 
     @PostMapping(value = "/new", produces = MediaType.APPLICATION_JSON_VALUE)
-    CategoryResponseDto createCategory(CategoryRequest categoryRequest);
+    CategoryResponseDto createCategory(@RequestBody CategoryRequest categoryRequest);
 }

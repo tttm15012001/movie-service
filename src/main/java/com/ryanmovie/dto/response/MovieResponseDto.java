@@ -2,6 +2,7 @@ package com.ryanmovie.dto.response;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.ryanmovie.common.converter.CustomDateFormat;
+import com.ryanmovie.model.entity.MovieStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,15 +36,17 @@ public class MovieResponseDto {
 
     private List<String> genre;
 
+    private List<String> categories;
+
     private String country;
 
     private String director;
 
-    private List<String> cast;
+    private List<String> casts;
 
-    private String episodes;
+    private Integer episodes;
 
-    private String status;
+    private MovieStatus status;
 
     @JsonSerialize(using = CustomDateFormat.class)
     private Date releaseDate;
