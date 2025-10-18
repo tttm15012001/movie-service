@@ -2,6 +2,7 @@ package com.ryanmovie.service.impl;
 
 import com.ryanmovie.dto.request.MovieRequest;
 import com.ryanmovie.dto.response.MovieResponseDto;
+import com.ryanmovie.model.entity.CategoryEnum;
 import com.ryanmovie.model.entity.CategoryModel;
 import com.ryanmovie.model.entity.MovieModel;
 import com.ryanmovie.repository.CategoryRepository;
@@ -10,11 +11,16 @@ import com.ryanmovie.service.MovieService;
 import com.ryanmovie.utils.StringUtil;
 import com.ryanmovie.validation.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Optional;
 
+import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_CATEGORY;
 import static com.ryanmovie.common.constant.DatabaseConstants.TABLE_MOVIE;
 
 @Service
@@ -65,6 +71,18 @@ public class MovieServiceImpl implements MovieService {
                 .build();
 
         return this.movieRepository.save(movieModel).toMovieResponseDto();
+    }
+
+    @Override
+    public Flux<List<MovieResponseDto>> getMoviesFlux(Long categoryId, int limit) {
+        return Mono.fromCallable(() ->
+            movieRepository.findTopByCategoryOrderByRateScoreDesc(categoryId, PageRequest.of(0, limit))
+                .stream()
+                .map(MovieModel::toMovieResponseDto)
+                .toList()
+        )
+        .subscribeOn(Schedulers.boundedElastic())
+        .flux();
     }
 
 }

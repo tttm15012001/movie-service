@@ -14,8 +14,8 @@ public interface CategoryApi {
     @GetMapping(value = "/{category-id}", produces = MediaType.APPLICATION_JSON_VALUE)
     CategoryResponseDto getCategory(@PathVariable("category-id") Long categoryId);
 
-    @GetMapping(value = "/top/categories", produces = MediaType.APPLICATION_JSON_VALUE)
-    List<CategoryResponseDto> getTopScoreCategory(int top);
+    @GetMapping(value = "/top/{top}", produces = MediaType.APPLICATION_JSON_VALUE)
+    List<CategoryResponseDto> getTopScoreCategory(@PathVariable("top") int top);
 
     @PostMapping(value = "/new", produces = MediaType.APPLICATION_JSON_VALUE)
     CategoryResponseDto createCategory(@RequestBody CategoryRequest categoryRequest);

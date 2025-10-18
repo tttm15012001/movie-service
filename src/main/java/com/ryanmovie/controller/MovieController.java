@@ -2,9 +2,12 @@ package com.ryanmovie.controller;
 
 import com.ryanmovie.api.MovieApi;
 import com.ryanmovie.dto.request.MovieRequest;
+import com.ryanmovie.dto.response.CategoryResponseDto;
+import com.ryanmovie.dto.response.CategoryWithMoviesResponseDto;
 import com.ryanmovie.dto.response.MovieResponseDto;
+import com.ryanmovie.service.CategoryService;
 import com.ryanmovie.service.MovieService;
-import com.ryanmovie.service.S3Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -12,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 import software.amazon.awssdk.services.ssm.model.GetParameterResponse;
@@ -21,12 +26,16 @@ import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 
 @RestController
 public class MovieController implements MovieApi {
+
+    @Value("${config.category.top}")
+    private int TOP_CATEGORIES;
+
+    @Value("${config.category.movies.top}")
+    private int TOP_MOVIES_PER_CATEGORY;
 
     @Value("${aws.s3.presignedurl.expire.time}")
     private int expireTime;
@@ -42,8 +51,15 @@ public class MovieController implements MovieApi {
 
     private final MovieService movieService;
 
-    public MovieController(MovieService movieService, S3Service s3Service) {
+    private final CategoryService categoryService;
+
+    @Autowired
+    public MovieController(
+            MovieService movieService,
+            CategoryService categoryService
+    ) {
         this.movieService = movieService;
+        this.categoryService = categoryService;
     }
 
     @Override
@@ -109,8 +125,32 @@ public class MovieController implements MovieApi {
                 .body(body);
     }
 
+    @Override
+    public Flux<CategoryWithMoviesResponseDto> getTopMoviesFromTopCategories() {
+        List<CategoryResponseDto> topCategories = categoryService.findTopScoreCategory(TOP_CATEGORIES);
+
+        return Flux.fromIterable(topCategories)
+                // flatMap = concurrent, non-blocking; not ordered
+                .flatMap(category ->
+                        movieService.getMoviesFlux(category.getId(), TOP_MOVIES_PER_CATEGORY)
+                                .map(movies -> CategoryWithMoviesResponseDto.builder()
+                                        .category(category)
+                                        .movies(movies)
+                                        .build())
+                                .defaultIfEmpty(CategoryWithMoviesResponseDto.builder()
+                                        .category(category)
+                                        .movies(Collections.emptyList())
+                                        .build())
+                                .onErrorResume(e -> Mono.just(
+                                        CategoryWithMoviesResponseDto.builder()
+                                                .category(category)
+                                                .movies(Collections.emptyList())
+                                                .build()))
+                );
+    }
+
     private byte[] signPolicy(String policy, PrivateKey privateKey) throws Exception {
-        Signature signer = Signature.getInstance("SHA1withRSA"); // CloudFront yêu cầu SHA1withRSA
+        Signature signer = Signature.getInstance("SHA1withRSA"); // CloudFront require SHA1withRSA
         signer.initSign(privateKey);
         signer.update(policy.getBytes());
         return signer.sign();

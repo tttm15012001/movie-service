@@ -1,10 +1,12 @@
 package com.ryanmovie.api;
 
 import com.ryanmovie.dto.request.MovieRequest;
+import com.ryanmovie.dto.response.CategoryWithMoviesResponseDto;
 import com.ryanmovie.dto.response.MovieResponseDto;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.Map;
@@ -21,4 +23,7 @@ public interface MovieApi {
 
     @GetMapping(value = "/{movie-name}/manifest", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<?> getManifestByMovieName(@PathVariable("movie-name") String movieName) throws Exception;
+
+    @GetMapping(value = "/top-list", produces = MediaType.APPLICATION_JSON_VALUE)
+    Flux<CategoryWithMoviesResponseDto> getTopMoviesFromTopCategories();
 }
