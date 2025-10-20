@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/ryanmovie
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: movie-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+config:
+  category:
+    top: 3
+    movies:
+      top: 10
+
+aws:
+  region: ap-southeast-1
+  s3:
+    bucket: ryan-movie-source-bucket
+    presignedurl:
+      expire:
+        time: 600
+  cloudfront:
+    distributiondomain: cdn.ryan-healthcare.com
+    keypairid: abcd
+    privatekeyssmname: /ryan-movie/cloudfront-private-key
