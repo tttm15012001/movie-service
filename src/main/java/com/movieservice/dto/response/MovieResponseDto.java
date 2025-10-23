@@ -19,42 +19,15 @@ public class MovieResponseDto {
 
     private Long id;
 
-    private Integer tmdbId;
+    private String searchTitle;
 
-    private Boolean forAdult;
-
-    private String title;
-
-    private String originalTitle;
-
-    private String description;
-
-    private Integer numberOfEpisodes;
+    private Integer releaseYear;
 
     private Double voteAverage;
 
-    private Integer voteCount;
+    private Long metadataId;
 
-    private Double popularity;
-
-    private String posterPath;
-
-    private String backdropPath;
-
-    @JsonSerialize(using = CustomDateFormat.class)
-    private Date releaseDate;
-
-    private String country;
-
-    private String originalLanguage;
-
-    private List<String> genre;
+    private Integer numberOfEpisodes;
 
     private List<String> categories;
-
-    private String director;
-
-    private List<String> casts;
-
-    private MovieStatus status;
 }

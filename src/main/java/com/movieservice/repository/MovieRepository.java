@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface MovieRepository extends JpaRepository<MovieModel, Long> {
@@ -30,5 +31,11 @@ public interface MovieRepository extends JpaRepository<MovieModel, Long> {
             Pageable pageable
     );
 
-    Optional<MovieModel> findByTitleIgnoreCase(String title);
+    @Query("SELECT LOWER(m.searchTitle) FROM MovieModel m")
+    Set<String> findAllSearchTitle();
+
+    @Query("SELECT LOWER(m.searchTitle) FROM MovieModel m WHERE m.metadataId is NULL")
+    Set<String> findAllSearchTitlesHasNoMetadata();
+
+    Optional<MovieModel> findBySearchTitleIgnoreCase(String title);
 }

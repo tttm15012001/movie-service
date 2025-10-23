@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static com.movieservice.common.constant.DatabaseConstants.TABLE_MOVIE;
 
@@ -69,10 +70,13 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    public MovieResponseDto getMovieById(Long movieId) {
-        return this.movieRepository.findMovieByIdWithCategories(movieId)
-            .map(MovieModel::toMovieResponseDto)
-            .orElseThrow(() -> new NotFoundException(TABLE_MOVIE, movieId));
+    public MovieModel saveMovie(MovieModel movieModel) {
+        return this.movieRepository.save(movieModel);
+    }
+
+    @Override
+    public Optional<MovieModel> getMovieById(Long movieId) {
+        return this.movieRepository.findMovieByIdWithCategories(movieId);
     }
 
     @Override
@@ -83,25 +87,9 @@ public class MovieServiceImpl implements MovieService {
             .toList();
 
         MovieModel movieModel = MovieModel.builder()
-                .tmdbId(movieRequest.getTdmbId())
-                .forAdult(movieRequest.getForAdult())
-                .title(movieRequest.getTitle())
-                .originalTitle(movieRequest.getOriginalTitle())
-                .description(movieRequest.getDescription())
-                .numberOfEpisodes(movieRequest.getNumberOfEpisodes())
-                .voteAverage(movieRequest.getVoteAverage())
-                .voteCount(movieRequest.getVoteCount())
-                .popularity(movieRequest.getPopularity())
-                .posterPath(movieRequest.getPosterPath())
-                .backdropPath(movieRequest.getBackdropPath())
-                .releaseDate(movieRequest.getReleaseDate())
-                .country(movieRequest.getCountry())
-                .originalLanguage(movieRequest.getOriginalLanguage())
-                .genre(movieRequest.getGenre())
+                .searchTitle(movieRequest.getSearchTitle())
+                .releaseYear(movieRequest.getReleaseYear())
                 .categories(categoryModels)
-                .director(movieRequest.getDirector())
-                .casts(StringUtil.convertListToString(movieRequest.getCasts()))
-                .status(movieRequest.getStatus())
                 .build();
 
         return this.movieRepository.save(movieModel).toMovieResponseDto();
