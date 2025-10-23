@@ -3,6 +3,7 @@ package com.movieservice.controller;
 import com.movieservice.api.CategoryApi;
 import com.movieservice.dto.request.CategoryRequest;
 import com.movieservice.dto.response.CategoryResponseDto;
+import com.movieservice.model.entity.CategoryModel;
 import com.movieservice.service.CategoryService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +29,10 @@ public class CategoryController implements CategoryApi {
 
     @Override
     public List<CategoryResponseDto> getTopScoreCategory(int top) {
-        return this.categoryService.findTopScoreCategory(top);
+        return this.categoryService.findTopScoreCategory(top)
+                .stream()
+                .map(CategoryModel::toCategoryResponseDto)
+                .toList();
     }
 
     @Override

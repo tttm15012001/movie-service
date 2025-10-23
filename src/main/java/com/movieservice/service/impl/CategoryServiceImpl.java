@@ -36,12 +36,9 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
-    public List<CategoryResponseDto> findTopScoreCategory(int top) {
+    public List<CategoryModel> findTopScoreCategory(int top) {
         Pageable pageable = PageRequest.of(0, top);
-        return this.categoryRepository.findAllByOrderByScoreDesc(pageable)
-                .stream()
-                .map(CategoryModel::toCategoryResponseDto)
-                .toList();
+        return this.categoryRepository.findAllByOrderByScoreDesc(pageable);
     }
 
     @Override
