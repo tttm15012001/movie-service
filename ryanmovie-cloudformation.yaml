@@ -354,10 +354,16 @@ Resources:
       GroupDescription: "Security Group For ALB"
       VpcId: !Ref RyanMovieVPC
 
-  SecurityGroupEcsTask:
+  SecurityGroupInternalAlb:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Security Group For ECS Task"
+      GroupDescription: "Security Group For Internal ALB (Metadata Service)"
+      VpcId: !Ref RyanMovieVPC
+
+  SecurityGroupClusterService:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group For All Cluster Services"
       VpcId: !Ref RyanMovieVPC
 
   SecurityGroupInterfaceEndpoint:
@@ -388,26 +394,46 @@ Resources:
       CidrIp: 0.0.0.0/0
 
   # ALB → ECS
-  AlbEgressToEcs:
+  PublicAlbEgressToClusterServices:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId: !Ref SecurityGroupAlb
       IpProtocol: tcp
-      FromPort: !Ref MovieContainerPort
-      ToPort: !Ref MovieContainerPort
-      DestinationSecurityGroupId: !Ref SecurityGroupEcsTask
+      FromPort: 0
+      ToPort: 10000
+      DestinationSecurityGroupId: !Ref SecurityGroupClusterService
 
-  # ECS ingress từ ALB
-  EcsIngressFromAlb:
+  # SG Cluster Services -> allow ingress from SG public ALB
+  ClusterServicesIngressFromPublicAlb:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref SecurityGroupEcsTask
+      GroupId: !Ref SecurityGroupClusterService
       IpProtocol: tcp
-      FromPort: !Ref MovieContainerPort
-      ToPort: !Ref MovieContainerPort
+      FromPort: 0
+      ToPort: 10000
       SourceSecurityGroupId: !Ref SecurityGroupAlb
 
-  # RDS ingress từ ECS
+  # SG ALB Internal -> allow egress to SG Cluster Services
+  InternalAlbEgressToClusterServices:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref SecurityGroupInternalAlb
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 10000
+      DestinationSecurityGroupId: !Ref SecurityGroupClusterService
+
+  # SG Cluster Services -> allow ingress from SG ALB Internal
+  ClusterServicesIngressFromInternalAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupClusterService
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 10000
+      SourceSecurityGroupId: !Ref SecurityGroupInternalAlb
+
+  # RDS -> allow ingress from SG Cluster Services
   RdsIngressFromEcs:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -415,9 +441,9 @@ Resources:
       IpProtocol: tcp
       FromPort: 3306
       ToPort: 3306
-      SourceSecurityGroupId: !Ref SecurityGroupEcsTask
+      SourceSecurityGroupId: !Ref SecurityGroupClusterService
 
-  # Interface Endpoint ingress từ ECS
+  # Interface Endpoint -> allow ingress from SG Cluster Services
   InterfaceEndpointIngressFromEcs:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -425,7 +451,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      SourceSecurityGroupId: !Ref SecurityGroupEcsTask
+      SourceSecurityGroupId: !Ref SecurityGroupClusterService
 
   # --- Application Load Balancer ---
   ApplicationLoadBalancer:
@@ -610,7 +636,7 @@ Resources:
             - !Ref PrivateSubnetA
             - !Ref PrivateSubnetB
           SecurityGroups:
-            - !Ref SecurityGroupEcsTask
+            - !Ref SecurityGroupClusterService
       LoadBalancers:
         - TargetGroupArn: !Ref AlbTargetGroup
           ContainerName: !Sub "${MovieServiceName}-container"
@@ -650,7 +676,7 @@ Resources:
       Scheme: internal
       Type: application
       SecurityGroups:
-        - !Ref SecurityGroupAlb
+        - !Ref SecurityGroupInternalAlb
       Subnets:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
@@ -764,7 +790,7 @@ Resources:
             - !Ref PrivateSubnetA
             - !Ref PrivateSubnetB
           SecurityGroups:
-            - !Ref SecurityGroupEcsTask
+            - !Ref SecurityGroupClusterService
       LoadBalancers:
         - TargetGroupArn: !Ref MetadataInternalAlbTargetGroup
           ContainerName: !Sub "${MetadataServiceName}-container"
