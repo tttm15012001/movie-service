@@ -134,7 +134,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DependsOn: DBSubnetGroup
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectTitle}-database"
+      DBInstanceIdentifier: !Sub "${MovieServiceName}-database"
       Engine: mysql
       EngineVersion: "8.0.42"
       DBInstanceClass: db.t3.micro
@@ -152,7 +152,7 @@ Resources:
       BackupRetentionPeriod: 1
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectTitle}-rds"
+          Value: !Sub "${MovieServiceName}-rds"
 
   # --- VPC / Subnets / Route Table / Internet Gateway---
   RyanMovieVPC:
@@ -617,6 +617,31 @@ Resources:
           ContainerPort: !Ref MovieContainerPort
 
   # ------------------------------- Resource For Metadata Svc -------------------------------
+  # --- Mysql RDS DB ---
+  MetadataRdsInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: DBSubnetGroup
+    Properties:
+      DBInstanceIdentifier: !Sub "${MetadataServiceName}-database"
+      Engine: mysql
+      EngineVersion: "8.0.42"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MasterUsername: !Ref DbUser
+      MasterUserPassword: !Ref DbPass
+      DBName: !Ref DbName
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRds
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      BackupRetentionPeriod: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${MetadataServiceName}-rds"
+
   # --- Application Load Balancer ---
   MetadataInternalAlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -697,7 +722,7 @@ Resources:
           Essential: true
           Environment:
             - Name: DB_URL
-              Value: !Sub "jdbc:mysql://${RdsInstance.Endpoint.Address}:3306/${MetadataDbName}"
+              Value: !Sub "jdbc:mysql://${MetadataRdsInstance.Endpoint.Address}:3306/${MetadataDbName}"
             - Name: DB_USER
               Value: !Ref DbUser
             - Name: KEY_PAIR_ID
@@ -721,7 +746,7 @@ Resources:
       - MetadataECSTaskDefinition
       - AlbListener
       - AlbListenerHTTP
-      - RdsInstance
+      - MetadataRdsInstance
     Properties:
       Cluster: !Ref MetadataEcsCluster
       ServiceName: !Sub "${MetadataServiceName}-service"
@@ -741,7 +766,7 @@ Resources:
           SecurityGroups:
             - !Ref SecurityGroupEcsTask
       LoadBalancers:
-        - TargetGroupArn: !Ref AlbTargetGroup
+        - TargetGroupArn: !Ref MetadataInternalAlbTargetGroup
           ContainerName: !Sub "${MetadataServiceName}-container"
           ContainerPort: !Ref MetadataContainerPort
 
@@ -1337,6 +1362,9 @@ Outputs:
   RdsEndpoint:
     Description: "RDS endpoint for application"
     Value: !Sub "jdbc:mysql://${RdsInstance.Endpoint.Address}:3306/${DbName}"
+  MetadataRdsEndpoint:
+    Description: "RDS endpoint for application"
+    Value: !Sub "jdbc:mysql://${MetadataRdsInstance.Endpoint.Address}:3306/${MetadataDbName}"
   TranscoderCloudFrontDomainName:
     Description: "Transcoder CF domain name"
     Value: !GetAtt TranscoderCloudFrontDistribution.DomainName
