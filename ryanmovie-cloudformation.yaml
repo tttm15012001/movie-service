@@ -348,16 +348,10 @@ Resources:
       GroupDescription: "Security Group For RDS Mysql DB"
       VpcId: !Ref RyanMovieVPC
 
-  SecurityGroupAlb:
+  SecurityGroupPublicAlb:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "Security Group For ALB"
-      VpcId: !Ref RyanMovieVPC
-
-  SecurityGroupInternalAlb:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security Group For Internal ALB (Metadata Service)"
       VpcId: !Ref RyanMovieVPC
 
   SecurityGroupClusterService:
@@ -378,26 +372,26 @@ Resources:
   AlbIngress443:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref SecurityGroupAlb
+      GroupId: !Ref SecurityGroupPublicAlb
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
       CidrIp: 0.0.0.0/0
 
-  AlbIngress80:
+  AlbIngressFromPort8082ToPort8085:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !Ref SecurityGroupAlb
+      GroupId: !Ref SecurityGroupPublicAlb
       IpProtocol: tcp
-      FromPort: 80
-      ToPort: 80
+      FromPort: 8082
+      ToPort: 8085
       CidrIp: 0.0.0.0/0
 
-  # ALB → ECS
+  # SG public ALB -> allow egress to SG Cluster Services
   PublicAlbEgressToClusterServices:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      GroupId: !Ref SecurityGroupAlb
+      GroupId: !Ref SecurityGroupPublicAlb
       IpProtocol: tcp
       FromPort: 0
       ToPort: 10000
@@ -411,27 +405,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 0
       ToPort: 10000
-      SourceSecurityGroupId: !Ref SecurityGroupAlb
-
-  # SG ALB Internal -> allow egress to SG Cluster Services
-  InternalAlbEgressToClusterServices:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref SecurityGroupInternalAlb
-      IpProtocol: tcp
-      FromPort: 0
-      ToPort: 10000
-      DestinationSecurityGroupId: !Ref SecurityGroupClusterService
-
-  # SG Cluster Services -> allow ingress from SG ALB Internal
-  ClusterServicesIngressFromInternalAlb:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref SecurityGroupClusterService
-      IpProtocol: tcp
-      FromPort: 0
-      ToPort: 10000
-      SourceSecurityGroupId: !Ref SecurityGroupInternalAlb
+      SourceSecurityGroupId: !Ref SecurityGroupPublicAlb
 
   # RDS -> allow ingress from SG Cluster Services
   RdsIngressFromEcs:
@@ -454,21 +428,21 @@ Resources:
       SourceSecurityGroupId: !Ref SecurityGroupClusterService
 
   # --- Application Load Balancer ---
-  ApplicationLoadBalancer:
+  RyanMovieAlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${MovieServiceName}-alb"
+      Name: !Sub "${ProjectTitle}-alb"
       Scheme: internet-facing
       Type: application
       SecurityGroups:
-        - !Ref SecurityGroupAlb
+        - !Ref SecurityGroupPublicAlb
       Subnets:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
       Tags:
         - Key: Name
-          Value: !Sub "${MovieServiceName}-alb"
-  AlbTargetGroup:
+          Value: !Sub "${ProjectTitle}-alb"
+  AlbTargetGroupMovie:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${MovieServiceName}-tg"
@@ -479,21 +453,57 @@ Resources:
       HealthCheckPath: "/health"
       Matcher:
         HttpCode: "200-399"
+  AlbTargetGroupMetadata:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${MetadataServiceName}-tg"
+      Port: !Ref MetadataContainerPort
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref RyanMovieVPC
+      HealthCheckPath: "/health"
+      Matcher:
+        HttpCode: "200-399"
   AlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      LoadBalancerArn: !Ref RyanMovieAlb
       Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref AlbCertificateArn
       DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 404
+            ContentType: text/plain
+            MessageBody: "Not Found"
+  AlbListenerMovie:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref RyanMovieAlb
+      Port: !Ref MovieContainerPort
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AlbCertificateArn
+      DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref AlbTargetGroup
+          TargetGroupArn: !Ref AlbTargetGroupMovie
+  AlbListenerMetadata:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref RyanMovieAlb
+      Port: !Ref MetadataContainerPort
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AlbCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroupMetadata
   AlbListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      LoadBalancerArn: !Ref RyanMovieAlb
       Port: 80
       Protocol: HTTP
       DefaultActions:
@@ -616,8 +626,8 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn:
       - ECSTaskDefinition
-      - AlbListener
-      - AlbListenerHTTP
+      - RyanMovieAlb
+      - AlbListenerMovie
       - RdsInstance
     Properties:
       Cluster: !Ref EcsCluster
@@ -638,7 +648,7 @@ Resources:
           SecurityGroups:
             - !Ref SecurityGroupClusterService
       LoadBalancers:
-        - TargetGroupArn: !Ref AlbTargetGroup
+        - TargetGroupArn: !Ref AlbTargetGroupMovie
           ContainerName: !Sub "${MovieServiceName}-container"
           ContainerPort: !Ref MovieContainerPort
 
@@ -656,7 +666,7 @@ Resources:
       StorageType: gp2
       MasterUsername: !Ref DbUser
       MasterUserPassword: !Ref DbPass
-      DBName: !Ref DbName
+      DBName: !Ref MetadataDbName
       VPCSecurityGroups:
         - !Ref SecurityGroupRds
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -667,54 +677,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${MetadataServiceName}-rds"
-
-  # --- Application Load Balancer ---
-  MetadataInternalAlb:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub "${MetadataServiceName}-alb"
-      Scheme: internal
-      Type: application
-      SecurityGroups:
-        - !Ref SecurityGroupInternalAlb
-      Subnets:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
-      Tags:
-        - Key: Name
-          Value: !Sub "${MetadataServiceName}-alb"
-  MetadataInternalAlbTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "${MetadataServiceName}-tg"
-      Port: !Ref MetadataContainerPort
-      Protocol: HTTP
-      TargetType: ip
-      VpcId: !Ref RyanMovieVPC
-      HealthCheckPath: "/health"
-      Matcher:
-        HttpCode: "200-399"
-  MetadataInternalAlbListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref MetadataInternalAlb
-      Port: !Ref MetadataContainerPort
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref MetadataInternalAlbTargetGroup
-  MetadataInternalAlbListenerHTTP:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref MetadataInternalAlb
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: "443"
-            StatusCode: HTTP_301
 
   # --- ECS Cluster / Task / Service ---
   MetadataEcsCluster:
@@ -742,7 +704,7 @@ Resources:
       TaskRoleArn: !GetAtt EcsTaskRole.Arn
       ContainerDefinitions:
         - Name: !Sub "${MetadataServiceName}-container"
-          Image: !Ref DockerImage
+          Image: !Ref MetadataDockerImage
           Cpu: 0
           MemoryReservation: 512
           Essential: true
@@ -770,8 +732,8 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn:
       - MetadataECSTaskDefinition
-      - AlbListener
-      - AlbListenerHTTP
+      - RyanMovieAlb
+      - AlbListenerMovie
       - MetadataRdsInstance
     Properties:
       Cluster: !Ref MetadataEcsCluster
@@ -792,7 +754,7 @@ Resources:
           SecurityGroups:
             - !Ref SecurityGroupClusterService
       LoadBalancers:
-        - TargetGroupArn: !Ref MetadataInternalAlbTargetGroup
+        - TargetGroupArn: !Ref AlbTargetGroupMetadata
           ContainerName: !Sub "${MetadataServiceName}-container"
           ContainerPort: !Ref MetadataContainerPort
 
@@ -1358,8 +1320,8 @@ Resources:
       Name: !Ref AlbDomainName
       Type: A
       AliasTarget:
-        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
-        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+        DNSName: !GetAtt RyanMovieAlb.DNSName
+        HostedZoneId: !GetAtt RyanMovieAlb.CanonicalHostedZoneID
         EvaluateTargetHealth: true
   AliasCdnRecord:
     Type: AWS::Route53::RecordSet
