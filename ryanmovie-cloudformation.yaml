@@ -71,6 +71,10 @@ Parameters:
     Type: Number
     Description: "Container Port - Metadata Svc"
     Default: 8083
+  TmdbToken:
+    Type: String
+    Default: eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmZjdmY2Q2ZmZiZjFkOTJiMzY1MjI0ZmRlNjAwMzk2YiIsIm5iZiI6MTc2MDc1MTE0My43OTcsInN1YiI6IjY4ZjJlZTI3OTE2MTljZTJlNGJkODUyMyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.xzCEp1-ETignfgcB5kqxbSD5KbngIx2h23ME9ZW2_1A
+    NoEcho: true
 
   # --- For Transcoder ---
   SourceBucketName:
@@ -122,6 +126,12 @@ Resources:
       Name: !Sub "/${ProjectTitle}/db-pass"
       Type: String
       Value: !Ref DbPass
+  TmdbTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectTitle}/tmdb-token"
+      Type: String
+      Value: !Ref TmdbToken
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -718,6 +728,8 @@ Resources:
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
+            - Name: TMDB_TOKEN
+              Value: !Ref TmdbTokenParameter
           PortMappings:
             - ContainerPort: !Ref MetadataContainerPort
               HostPort: !Ref MetadataContainerPort
