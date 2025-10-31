@@ -13,21 +13,13 @@ CREATE TABLE category (
 -- -----------------------------
 CREATE TABLE movie (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    search_title VARCHAR(100),
+    release_year INT,
+    metadata_id BIGINT,
+    number_of_episodes INT,
+    vote_average FLOAT,
     created_date DATETIME NOT NULL,
-    last_modified_date DATETIME,
-    title VARCHAR(255),
-    original_title VARCHAR(255),
-    description TEXT,
-    manufacturing_date DATE,
-    rate_score FLOAT,
-    review_quantity INT,
-    duration INT,
-    country VARCHAR(255),
-    director VARCHAR(255),
-    casts TEXT,
-    episodes INT,
-    status VARCHAR(255),
-    release_date DATE
+    last_modified_date DATETIME
 );
 
 -- -----------------------------
@@ -41,16 +33,4 @@ CREATE TABLE movie_category_mapping (
         REFERENCES movie(id) ON DELETE CASCADE,
     CONSTRAINT fk_movie_category_category FOREIGN KEY (category_id)
         REFERENCES category(id) ON DELETE CASCADE
-);
-
--- -----------------------------
--- Table: movie_genre_mapping (for @ElementCollection)
--- -----------------------------
-CREATE TABLE movie_genre_mapping (
-    movie_id BIGINT NOT NULL,
-    genre VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_movie_genre_movie
-        FOREIGN KEY (movie_id)
-            REFERENCES movie(id)
-            ON DELETE CASCADE
 );

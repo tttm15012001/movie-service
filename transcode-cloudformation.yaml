@@ -1,0 +1,1202 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Transcoder pipeline - S3 -> Default EventBus -> Custom EventBus -> SQS -> Lambda -> S3
+
+Parameters:
+  ProjectTitle:
+    Type: String
+    Description: "Title of side project"
+    Default: "ryan-movie"
+  WhitelistIps:
+    Type: String
+    Description: "Whitelist IPs"
+    Default: '171.227.203.245/32'
+  AccountId:
+    Type: String
+    Description: "AWS Account ID"
+    Default: "703671925000"
+  DockerImage:
+    Type: String
+    Description: "Docker Image"
+    Default: "703671925000.dkr.ecr.ap-southeast-1.amazonaws.com/ryan-movie:latest"
+  DbName:
+    Type: String
+    Description: "DB Name"
+    Default: "ryanmovie"
+  DbUser:
+    Type: String
+    Description: "DB Username"
+    Default: "ryan"
+  DbPass:
+    Type: String
+    Description: "DB Password"
+    Default: "Nhatnam1501"
+    NoEcho: true
+  ContainerPort:
+    Type: Number
+    Description: "Container Port - Spring Boot App Port"
+    Default: 8080
+  AlbCertificateArn:
+    Type: String
+    Description: "ACM Certificate ARN for ALB HTTPS listener"
+    Default: "arn:aws:acm:ap-southeast-1:703671925000:certificate/798c67f8-4bb3-4a6b-b2db-93ad2da19ee2"
+  AlbDomainName:
+    Type: String
+    Description: "Domain Name"
+    Default: "api.ryan-healthcare.com"
+  HostedZoneId:
+    Type: String
+    Description: "Hosted Zone ID"
+    Default: "Z01328333D9BTV319SCDR"
+  HealthCheckPeriod:
+    Type: String
+    Description: "Health Check Period"
+    Default: 60
+
+  # --- For Transcoder ---
+  SourceBucketName:
+    Type: String
+    Default: ryan-movie-transcoder-source
+  TranscoderEventBusName:
+    Type: String
+    Default: transcoder-event-bus
+  QueueName:
+    Type: String
+    Default: TranscoderQueue
+  LambdaFunctionName:
+    Type: String
+    Default: Transcoder
+  PublicKeyName:
+    Type: String
+    Default: ryan-movie-public-key
+  CdnDomainName:
+    Type: String
+    Description: "Domain Name"
+    Default: "cdn.ryan-healthcare.com"
+  CloudFrontHostedZoneId:
+    Type: String
+    Default: Z2FDTNDATAQYW2   # constant value
+  CdnCertificateArn:
+    Type: String
+    Description: "ACM Certificate ARN for CDN"
+    Default: "arn:aws:acm:us-east-1:703671925000:certificate/1f6f67e3-5461-4b7c-874c-1a830c132097"
+
+  # --- For FE ---
+  SourceFeBucketName:
+    Type: String
+    Default: fe.ryan-healthcare.com
+  FeCertificateArn:
+    Type: String
+    Description: "ACM Certificate ARN for FE"
+    Default: "arn:aws:acm:us-east-1:703671925000:certificate/d78dd971-2955-4abb-9bf4-9fdffc356d35"
+  FeCdnDomainName:
+    Type: String
+    Description: "Domain Name"
+    Default: "ryan-healthcare.com"
+
+Resources:
+  # --- Mysql RDS DB ---
+  DbPassParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectTitle}/db-pass"
+      Type: String
+      Value: !Ref DbPass
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ProjectTitle} RDS subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      DBSubnetGroupName: !Sub "${ProjectTitle}-db-subnet-group"
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: DBSubnetGroup
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectTitle}-database"
+      Engine: mysql
+      EngineVersion: "8.0.42"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MasterUsername: !Ref DbUser
+      MasterUserPassword: !Ref DbPass
+      DBName: !Ref DbName
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRds
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      BackupRetentionPeriod: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-rds"
+
+  # --- VPC / Subnets / Route Table / Internet Gateway---
+  RyanMovieVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-vpc"
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-public-subnet-a"
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-public-subnet-b"
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-private-subnet-a"
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      CidrBlock: "10.0.4.0/24"
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-private-subnet-b"
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-itn-gw"
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      InternetGatewayId: !Ref InternetGateway
+  RouteTablePublicSubnet:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-rt-public-subnet"
+  RouteTablePrivateSubnet:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-rt-private-subnet"
+  RoutePublicSubnetDefaultIpv4:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTablePublicSubnet
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+  RouteTableAssociationPublicSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref RouteTablePublicSubnet
+  RouteTableAssociationPublicSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref RouteTablePublicSubnet
+  RouteTableAssociationPrivateSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref RouteTablePrivateSubnet
+  RouteTableAssociationPrivateSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref RouteTablePrivateSubnet
+
+  # --- VPC Endpoints ---
+  InterfaceEndpointEcrApi:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-interface-endpoint-ecr-api"
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupInterfaceEndpoint.GroupId
+  InterfaceEndpointEcrDkr:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-interface-endpoint-ecr-dkr"
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupInterfaceEndpoint.GroupId
+  InterfaceEndpointCloudWatchLog:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-interface-endpoint-logs"
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupInterfaceEndpoint.GroupId
+  GatewayEndpointS3:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Gateway
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      RouteTableIds:
+        - !Ref RouteTablePrivateSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-gateway-endpoint-s3"
+  InterfaceEndpointSSM:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      SecurityGroupIds:
+        - !Ref SecurityGroupInterfaceEndpoint
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-interface-endpoint-ssm"
+  InterfaceEndpointEC2Messages:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      SecurityGroupIds:
+        - !Ref SecurityGroupInterfaceEndpoint
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-interface-endpoint-ec2messages"
+
+
+  # --- Security Groups ---
+  SecurityGroupRds:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group For RDS Mysql DB"
+      VpcId: !Ref RyanMovieVPC
+
+  SecurityGroupAlb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group For ALB"
+      VpcId: !Ref RyanMovieVPC
+
+  SecurityGroupEcsTask:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group For ECS Task"
+      VpcId: !Ref RyanMovieVPC
+
+  SecurityGroupInterfaceEndpoint:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group For Interface Endpoint - Allow For SG ECS Task"
+      VpcId: !Ref RyanMovieVPC
+
+  # --- Security Group Rules ---
+
+  # ALB ingress (từ internet)
+  AlbIngress443:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupAlb
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+
+  AlbIngress80:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupAlb
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  # ALB → ECS
+  AlbEgressToEcs:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref SecurityGroupAlb
+      IpProtocol: tcp
+      FromPort: !Ref ContainerPort
+      ToPort: !Ref ContainerPort
+      DestinationSecurityGroupId: !Ref SecurityGroupEcsTask
+
+  # ECS ingress từ ALB
+  EcsIngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupEcsTask
+      IpProtocol: tcp
+      FromPort: !Ref ContainerPort
+      ToPort: !Ref ContainerPort
+      SourceSecurityGroupId: !Ref SecurityGroupAlb
+
+  # RDS ingress từ ECS
+  RdsIngressFromEcs:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupRds
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref SecurityGroupEcsTask
+
+  # Interface Endpoint ingress từ ECS
+  InterfaceEndpointIngressFromEcs:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupInterfaceEndpoint
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref SecurityGroupEcsTask
+
+  # --- Application Load Balancer ---
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectTitle}-alb"
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref SecurityGroupAlb
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTitle}-alb"
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectTitle}-tg"
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref RyanMovieVPC
+      HealthCheckPath: "/health"
+      Matcher:
+        HttpCode: "200-399"
+  AlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AlbCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+  AlbListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  # --- ECS Cluster / Task / Service / Role for ECS Task ---
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectTitle}-ecs-task-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # ECS task execution role policy (pull image, log...)
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: !Sub "${ProjectTitle}-getParameters"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AllowGetSSMParams
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/${ProjectTitle}/*"
+              - Sid: AllowKMSDecrypt
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectTitle}-ecs-task-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ProjectTitle}-ssm-access"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AllowGetSSMParams
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/${ProjectTitle}/*"
+              - Sid: AllowKMSDecrypt
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: "RyanMovieCluster"
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 1
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectTitle}-task-def"
+      Cpu: "512"
+      Memory: "1024"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub "${ProjectTitle}-container"
+          Image: !Ref DockerImage
+          Cpu: 0
+          MemoryReservation: 512
+          Essential: true
+          Environment:
+            - Name: DB_URL
+              Value: !Sub "jdbc:mysql://${RdsInstance.Endpoint.Address}:3306/${DbName}"
+            - Name: DB_USER
+              Value: !Ref DbUser
+            - Name: KEY_PAIR_ID
+              Value: !Ref CloudFrontPublicKey
+          Secrets:
+            - Name: DB_PASS
+              ValueFrom: !Ref DbPassParameter
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              HostPort: !Ref ContainerPort
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub "/ecs/${ProjectTitle}"
+              awslogs-region: ap-southeast-1
+              awslogs-stream-prefix: !Sub "${ProjectTitle}-container"
+  RyanMovieService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ECSTaskDefinition
+      - AlbListener
+      - AlbListenerHTTP
+      - RdsInstance
+    Properties:
+      Cluster: !Ref ECSCluster
+      ServiceName: !Sub "${ProjectTitle}-service"
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 0
+      HealthCheckGracePeriodSeconds: !Ref HealthCheckPeriod
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnetA
+            - !Ref PrivateSubnetB
+          SecurityGroups:
+            - !Ref SecurityGroupEcsTask
+      LoadBalancers:
+        - TargetGroupArn: !Ref AlbTargetGroup
+          ContainerName: !Sub "${ProjectTitle}-container"
+          ContainerPort: !Ref ContainerPort
+
+  # ------------------------------ For Transcoder ------------------------------
+  # --- S3 Bucket ---
+  SourceMovie:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SourceBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+  MovieBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - SourceMovie
+      - TranscoderCloudFrontDistribution
+    Properties:
+      Bucket: !Ref SourceMovie
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowTranscoderCloudFrontOACRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${SourceBucketName}/hls/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AccountId}:distribution/${TranscoderCloudFrontDistribution}"
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${SourceBucketName}/hls/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # --- Event Bus Rule ---
+  TranscoderEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref TranscoderEventBusName
+  EventBridgeToEventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowPutToTranscoderEventBus
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource: !GetAtt TranscoderEventBus.Arn
+  ForwardFromDefaultToTranscoderEventBusRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: default
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+      Targets:
+        - Arn: !GetAtt TranscoderEventBus.Arn
+          Id: ForwardToTranscoderEventBus
+          RoleArn: !GetAtt EventBridgeToEventBridgeRole.Arn
+  TranscoderQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Ref QueueName
+      VisibilityTimeout: 1440
+  EventBridgeToSqsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowPutToSQS
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt TranscoderQueue.Arn
+  ForwardToSqsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref TranscoderEventBus
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref SourceBucketName
+          object:
+            key:
+              - wildcard: "source/*.mp4"
+      Targets:
+        - Arn: !GetAtt TranscoderQueue.Arn
+          Id: ForwardToTranscoderSqs
+          RoleArn: !GetAtt EventBridgeToSqsRole.Arn
+
+  # --- Transcoder Lambda ---
+  TranscoderLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaS3SqsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt TranscoderQueue.Arn
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${SourceBucketName}/*"
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${SourceBucketName}/result/*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - mediaconvert:CreateJob
+                Resource: "*"
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt MediaConvertRole.Arn
+  TranscoderLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Role: !GetAtt TranscoderLambdaExecutionRole.Arn
+      Runtime: python3.12
+      Timeout: 900
+      Handler: index.handler
+      Environment:
+        Variables:
+          MEDIA_CONVERT_ROLE: !GetAtt MediaConvertRole.Arn
+          MEDIA_CONVERT_TEMPLATE: !Ref MediaConvertJobTemplate
+          MEDIA_CONVERT_ENDPOINT: "https://mediaconvert.ap-southeast-1.amazonaws.com"
+          OUTPUT_BUCKET: !Ref SourceBucketName
+      Code:
+        ZipFile: |
+          import boto3, os, json
+          from urllib.parse import unquote_plus
+          import ntpath
+
+          mc_client = boto3.client("mediaconvert", endpoint_url=os.environ["MEDIA_CONVERT_ENDPOINT"])
+
+          def handler(event, context):
+              print("Event:", json.dumps(event))
+              for record in event["Records"]:
+                  body = json.loads(record["body"])
+                  detail = body.get("detail", {})
+                  bucket = detail.get("bucket", {}).get("name")
+                  key = unquote_plus(detail.get("object", {}).get("key", ""))
+
+                  if not bucket or not key:
+                      print("No bucket/key found")
+                      continue
+
+                  if key.endswith("/"):
+                      print(f"Skipping folder marker: {key}")
+                      continue
+
+                  # input file
+                  input_url = f"s3://{bucket}/{key}"
+                  filename = ntpath.basename(key).rsplit(".", 1)[0]
+
+                  # output folder: hls/{filename}/
+                  output_url = f"s3://{os.environ['OUTPUT_BUCKET']}/hls/{filename}/"
+
+                  try:
+                      response = mc_client.create_job(
+                          Role=os.environ["MEDIA_CONVERT_ROLE"],
+                          JobTemplate=os.environ["MEDIA_CONVERT_TEMPLATE"],
+                          Settings={
+                              "Inputs": [
+                                  {"FileInput": input_url}
+                              ],
+                              "OutputGroups": [
+                                  {
+                                      "Name": "HLS Group",
+                                      "OutputGroupSettings": {
+                                          "Type": "HLS_GROUP_SETTINGS",
+                                          "HlsGroupSettings": {
+                                              "Destination": output_url,
+                                              "SegmentLength": 6,
+                                              "MinSegmentLength": 0,
+                                              "DirectoryStructure": "SINGLE_DIRECTORY",
+                                              "ManifestDurationFormat": "INTEGER",
+                                              "OutputSelection": "MANIFESTS_AND_SEGMENTS",
+                                              "ProgramDateTime": "EXCLUDE",
+                                              "SegmentControl": "SEGMENTED_FILES",
+                                              "ManifestCompression": "NONE",
+                                              "ClientCache": "ENABLED"
+                                          }
+                                      }
+                                  }
+                              ]
+                          }
+                      )
+                      print(f"MediaConvert job created: {response['Job']['Id']} → {output_url}")
+                  except Exception as e:
+                      print(f"MediaConvert job failed: {e}")
+  LambdaSQSTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      EventSourceArn: !GetAtt TranscoderQueue.Arn
+      FunctionName: !Ref TranscoderLambda
+      Enabled: true
+
+  # --- Convert Job ---
+  MediaConvertRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: mediaconvert.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MediaConvertS3Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${SourceBucketName}/*"
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${SourceBucketName}/hls/*"
+  MediaConvertJobTemplate:
+    Type: AWS::MediaConvert::JobTemplate
+    Properties:
+      Name: transcoder-hls-template
+      Category: VideoTranscode
+      SettingsJson:
+        TimecodeConfig:
+          Source: EMBEDDED
+        Inputs:
+          - AudioSelectors:
+              "Audio Selector 1":
+                DefaultSelection: DEFAULT
+            VideoSelector: { }
+            FilterEnable: AUTO
+            PsiControl: USE_PSI
+            DeblockFilter: DISABLED
+            DenoiseFilter: DISABLED
+            TimecodeSource: EMBEDDED
+        OutputGroups:
+          - Name: HLS Group
+            OutputGroupSettings:
+              Type: HLS_GROUP_SETTINGS
+              HlsGroupSettings:
+                Destination: "s3://example-placeholder/hls/"
+                SegmentLength: 6
+                MinSegmentLength: 0
+                DirectoryStructure: SINGLE_DIRECTORY
+                ManifestDurationFormat: INTEGER
+                OutputSelection: MANIFESTS_AND_SEGMENTS
+                ProgramDateTime: EXCLUDE
+                SegmentControl: SEGMENTED_FILES
+                ManifestCompression: NONE
+                ClientCache: ENABLED
+            Outputs:
+              # 1080p
+              - NameModifier: "_1080p"
+                ContainerSettings:
+                  Container: M3U8
+                VideoDescription:
+                  Width: 1920
+                  Height: 1080
+                  CodecSettings:
+                    Codec: H_264
+                    H264Settings:
+                      RateControlMode: VBR
+                      Bitrate: 6000000
+                      MaxBitrate: 7000000
+                      FramerateControl: INITIALIZE_FROM_SOURCE
+                      GopSize: 2
+                      GopSizeUnits: SECONDS
+                      SceneChangeDetect: ENABLED
+                      CodecProfile: MAIN
+                      CodecLevel: AUTO
+                      InterlaceMode: PROGRESSIVE
+                AudioDescriptions:
+                  - AudioSourceName: "Audio Selector 1"
+                    CodecSettings:
+                      Codec: AAC
+                      AacSettings:
+                        Bitrate: 160000
+                        CodingMode: CODING_MODE_2_0
+                        SampleRate: 48000
+                        Specification: MPEG4
+
+              # 960p
+              - NameModifier: "_960p"
+                ContainerSettings:
+                  Container: M3U8
+                VideoDescription:
+                  Width: 1706
+                  Height: 960
+                  CodecSettings:
+                    Codec: H_264
+                    H264Settings:
+                      RateControlMode: VBR
+                      Bitrate: 3500000
+                      MaxBitrate: 4200000
+                      FramerateControl: INITIALIZE_FROM_SOURCE
+                      GopSize: 2
+                      GopSizeUnits: SECONDS
+                      SceneChangeDetect: ENABLED
+                      CodecProfile: MAIN
+                      CodecLevel: AUTO
+                      InterlaceMode: PROGRESSIVE
+                AudioDescriptions:
+                  - AudioSourceName: "Audio Selector 1"
+                    CodecSettings:
+                      Codec: AAC
+                      AacSettings:
+                        Bitrate: 160000
+                        CodingMode: CODING_MODE_2_0
+                        SampleRate: 48000
+                        Specification: MPEG4
+
+              # 480p
+              - NameModifier: "_480p"
+                ContainerSettings:
+                  Container: M3U8
+                VideoDescription:
+                  Width: 854
+                  Height: 480
+                  CodecSettings:
+                    Codec: H_264
+                    H264Settings:
+                      RateControlMode: VBR
+                      Bitrate: 900000
+                      MaxBitrate: 1200000
+                      FramerateControl: INITIALIZE_FROM_SOURCE
+                      GopSize: 2
+                      GopSizeUnits: SECONDS
+                      SceneChangeDetect: ENABLED
+                      CodecProfile: MAIN
+                      CodecLevel: AUTO
+                      InterlaceMode: PROGRESSIVE
+                AudioDescriptions:
+                  - AudioSourceName: "Audio Selector 1"
+                    CodecSettings:
+                      Codec: AAC
+                      AacSettings:
+                        Bitrate: 128000
+                        CodingMode: CODING_MODE_2_0
+                        SampleRate: 48000
+                        Specification: MPEG4
+
+  # --- CloudFront ---
+  HlsCorsHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: hls-cors
+        Comment: "CORS for HLS (.m3u8, .ts)"
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items:
+              - !Sub "https://${FeCdnDomainName}"
+          AccessControlAllowHeaders:
+            Items:
+              - Content-Type
+              - Authorization
+              - Range
+              - Accept
+              - Origin
+              - Referer
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowCredentials: true
+          OriginOverride: true
+  CloudFrontPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref "AWS::StackName"
+        Name: ryan-movie-public-key
+        EncodedKey: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArf9T/9CDN322oypR+yw7umnu5z0UErpKoXErNfj0RelwxHRxYrHPsGpuig4aNFuRgcEZo77iWMkp9qw+UAQpSe3oDq0LsCHRupmDQp6Z2FkktDEVpa/u/8ndjAKyerQjsfgxHhHtvddG09gDJVUTqwe2pONfdwaCGNeCGDAdaoG0dlIBhGO1xW7mKsZ4eU8or5DyIQs712QrtznOmov0YGDL5wWMQqYA+XUDf/MDa/OvRLrsm7rfjEKcFUmjmfufRcBnRFW6JP9GYEBMhMxZyET/7W60AeN6541rJj6k5oYaPoDG9D/tBreW+RzTcWrSOyhkUAsOm6JMv7itPTPfTwIDAQAB
+          -----END PUBLIC KEY-----
+        Comment: "Public key for signed URL"
+  CloudFrontKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Ref PublicKeyName
+        Items:
+          - !Ref CloudFrontPublicKey
+        Comment: "Key group for signed URL/ signed cookie"
+  TranscoderCloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectTitle}-transcoder-oac"
+        Description: !Sub "OAC for ${ProjectTitle} transcoder"
+        SigningProtocol: sigv4
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3
+  TranscoderCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: TranscoderCloudFrontOAC
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: "CloudFront for ryan-movie HLS streaming"
+        Aliases:
+          - !Ref CdnDomainName
+        Origins:
+          - Id: MovieS3Origin
+            DomainName: !Sub "${SourceBucketName}.s3.${AWS::Region}.amazonaws.com"
+            OriginAccessControlId: !Ref TranscoderCloudFrontOAC
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: MovieS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [ GET, HEAD, OPTIONS ]
+          CachedMethods: [ GET, HEAD ]
+          ForwardedValues:
+            QueryString: false
+          TrustedKeyGroups:
+            - !Ref CloudFrontKeyGroup
+          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CdnCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  # ------------------------------ For FE ------------------------------
+  # --- S3 Bucket ---
+  SourceFe:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SourceFeBucketName
+  SourceFeBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - SourceFe
+      - FeCloudFrontDistribution
+    Properties:
+      Bucket: !Ref SourceFe
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowFeCloudFrontDistributionRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${SourceFe}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AccountId}:distribution/${FeCloudFrontDistribution}"
+
+  # --- CloudFront ---
+  FeCloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectTitle}-fe-oac"
+        Description: !Sub "OAC for ${ProjectTitle} frontend"
+        SigningProtocol: sigv4
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3
+  FeCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - FeCloudFrontOAC
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "CloudFront for ${ProjectTitle} frontend"
+        DefaultRootObject: index.html
+        Aliases:
+          - !Ref FeCdnDomainName
+        Origins:
+          - Id: FeS3Origin
+            DomainName: !Sub "${SourceFe}.s3.${AWS::Region}.amazonaws.com"
+            OriginAccessControlId: !Ref FeCloudFrontOAC
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: FeS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [ GET, HEAD, OPTIONS ]
+          CachedMethods: [ GET, HEAD ]
+          ForwardedValues:
+            QueryString: false
+          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+            ErrorCachingMinTTL: 0
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref FeCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  # --- Route 53 Record ---
+  AliasAlbRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref AlbDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+  AliasCdnRecord:
+    Type: AWS::Route53::RecordSet
+    DependsOn: TranscoderCloudFrontDistribution
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CdnDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt TranscoderCloudFrontDistribution.DomainName
+        HostedZoneId: !Ref CloudFrontHostedZoneId
+        EvaluateTargetHealth: false
+  AliasCdnFeRecord:
+    Type: AWS::Route53::RecordSet
+    DependsOn: FeCloudFrontDistribution
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref FeCdnDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt FeCloudFrontDistribution.DomainName
+        HostedZoneId: !Ref CloudFrontHostedZoneId
+        EvaluateTargetHealth: false
+
+Outputs:
+  RdsEndpoint:
+    Description: "RDS endpoint for application"
+    Value: !Sub "jdbc:mysql://${RdsInstance.Endpoint.Address}:3306/${DbName}"
+  TranscoderCloudFrontDomainName:
+    Description: "Transcoder CF domain name"
+    Value: !GetAtt TranscoderCloudFrontDistribution.DomainName
+  TranscoderCloudFrontDistributionId:
+    Description: "Transcoder distribution Id"
+    Value: !Ref TranscoderCloudFrontDistribution
+  FeCloudFrontDomainName:
+    Description: "FE CF domain name"
+    Value: !GetAtt FeCloudFrontDistribution.DomainName
+  FeCloudFrontDistributionId:
+    Description: "FE distribution Id"
+    Value: !Ref FeCloudFrontDistribution
