@@ -17,7 +17,7 @@ USER spring:spring
 WORKDIR /app
 
 # Copy file jar từ builder stage
-COPY --from=builder /workspace/target/ryanmovie-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=builder /workspace/target/movie-service-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
