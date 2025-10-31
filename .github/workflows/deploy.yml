@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # OIDC
+      id-token: write   # For OIDC
       contents: read
 
     steps:
