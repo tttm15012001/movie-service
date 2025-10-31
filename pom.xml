@@ -178,12 +178,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>com.movieservice.spring.kafka.KafkaApplication</mainClass>
-                    <layers>
-                        <enabled>true</enabled>
-                    </layers>
-                </configuration>
 <!--                <configuration>-->
 <!--                    <excludes>-->
 <!--                        <exclude>-->
