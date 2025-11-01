@@ -729,7 +729,7 @@ Resources:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
             - Name: TMDB_TOKEN
-              Value: !Ref TmdbTokenParameter
+              ValueFrom: !Ref TmdbTokenParameter
           PortMappings:
             - ContainerPort: !Ref MetadataContainerPort
               HostPort: !Ref MetadataContainerPort
