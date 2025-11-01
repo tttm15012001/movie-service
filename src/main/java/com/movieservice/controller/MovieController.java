@@ -9,16 +9,16 @@ import com.movieservice.dto.response.ManifestResponseDto;
 import com.movieservice.dto.response.MovieResponseDto;
 import com.movieservice.messaging.producer.CrawlMovieRequestProducer;
 import com.movieservice.model.entity.CategoryModel;
-import com.movieservice.model.entity.MovieModel;
 import com.movieservice.service.CategoryService;
 import com.movieservice.service.MovieService;
-import com.movieservice.validation.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
@@ -30,6 +30,9 @@ import java.util.Optional;
 @RestController
 @Slf4j
 public class MovieController implements MovieApi {
+
+    @Value("${config.crawl.key}")
+    private String KEY_CRAWL_MOVIE;
 
     @Value("${config.category.top}")
     private int TOP_CATEGORIES;
@@ -74,7 +77,15 @@ public class MovieController implements MovieApi {
     }
 
     @Override
-    public ResponseEntity<CrawlMovieResponse> crawlMovie(@RequestBody List<CrawlMovieRequest> movieRequest) {
+    public ResponseEntity<CrawlMovieResponse> crawlMovie(
+            @RequestHeader(value = "x-api-key") String apiKey,
+            @RequestBody List<CrawlMovieRequest> movieRequest
+    ) {
+        if (!KEY_CRAWL_MOVIE.equals(apiKey)) {
+            log.warn("Unauthorized request with invalid API key: {}", apiKey);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         log.info("Received {} movies for crawling", movieRequest.size());
         crawlMovieProducer.sendCrawlRequest(movieRequest);
 

@@ -54,6 +54,14 @@ Parameters:
     Type: String
     Description: "Health Check Period"
     Default: 60
+  KafkaSsmPath:
+    Type: String
+    Description: "Kafka Server SSM Path"
+    Default: "/ryan-movie/kafka-server"
+  KeyCrawlMovieSsmPath:
+    Type: String
+    Description: "Key Crawl Movies SSM Path"
+    Default: "/ryan-movie/key-crawl-movie"
 
   # --- For Metadata Svc ---
   MetadataServiceName:
@@ -624,6 +632,10 @@ Resources:
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
+            - Name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              ValueFrom: !Ref KafkaSsmPath
+            - Name: KEY_CRAWL_MOVIE
+              ValueFrom: !Ref KeyCrawlMovieSsmPath
           PortMappings:
             - ContainerPort: !Ref MovieContainerPort
               HostPort: !Ref MovieContainerPort
@@ -734,6 +746,8 @@ Resources:
               ValueFrom: !Ref DbPassParameter
             - Name: TMDB_TOKEN
               ValueFrom: !Ref TmdbTokenParameter
+            - Name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              ValueFrom: !Ref KafkaSsmPath
           PortMappings:
             - ContainerPort: !Ref MetadataContainerPort
               HostPort: !Ref MetadataContainerPort

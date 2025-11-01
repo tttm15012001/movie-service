@@ -32,6 +32,7 @@ config:
       top: 10
   crawl:
     current-year: 2025
+    key: ${KEY_CRAWL_MOVIE}
 
 connector:
   alb:

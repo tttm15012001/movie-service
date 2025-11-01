@@ -32,5 +32,8 @@ public interface MovieApi {
     Flux<CategoryWithMoviesResponseDto> getTopMoviesFromTopCategories();
 
     @PostMapping(value = "/crawl", consumes = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<CrawlMovieResponse> crawlMovie(@RequestBody List<CrawlMovieRequest> movieRequest);
+    ResponseEntity<CrawlMovieResponse> crawlMovie(
+            @RequestHeader(value = "x-api-key") String apiKey,
+            @RequestBody List<CrawlMovieRequest> movieRequest
+    );
 }
