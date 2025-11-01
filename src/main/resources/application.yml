@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: none
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: pkc-312o0.ap-southeast-1.aws.confluent.cloud:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
