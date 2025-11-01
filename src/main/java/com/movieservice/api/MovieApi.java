@@ -13,13 +13,14 @@ import reactor.core.publisher.Flux;
 
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.movieservice.common.constant.ApiConstant.MOVIE_API_URL;
 
 @RequestMapping(MOVIE_API_URL)
 public interface MovieApi {
     @GetMapping(value = "/{movie-id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    MovieResponseDto getMovie(@PathVariable("movie-id") Long movieId);
+    Optional<MovieResponseDto> getMovie(@PathVariable("movie-id") Long movieId);
 
     @PostMapping(value = "/new", consumes = MediaType.APPLICATION_JSON_VALUE)
     MovieResponseDto createMovie(@RequestBody MovieRequest movieRequest);

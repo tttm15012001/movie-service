@@ -24,8 +24,8 @@ import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
-import static com.movieservice.common.constant.DatabaseConstants.TABLE_MOVIE;
 
 @RestController
 @Slf4j
@@ -57,10 +57,8 @@ public class MovieController implements MovieApi {
     }
 
     @Override
-    public MovieResponseDto getMovie(@PathVariable(value = "movie-id") Long movieId) {
-        return this.movieService.getMovieById(movieId)
-                .map(MovieModel::toMovieResponseDto)
-                .orElseThrow(() -> new NotFoundException(TABLE_MOVIE, movieId));
+    public Optional<MovieResponseDto> getMovie(@PathVariable(value = "movie-id") Long movieId) {
+        return this.movieService.getMovieDetailById(movieId);
     }
 
     @Override

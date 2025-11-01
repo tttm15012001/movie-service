@@ -1,5 +1,6 @@
 package com.movieservice.service.impl;
 
+import com.movieservice.connector.MetadataServiceConnector;
 import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.ManifestResponseDto;
@@ -11,6 +12,7 @@ import com.movieservice.repository.MovieRepository;
 import com.movieservice.service.MovieService;
 import com.movieservice.utils.StringUtil;
 import com.movieservice.validation.exception.NotFoundException;
+import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -61,12 +63,16 @@ public class MovieServiceImpl implements MovieService {
 
     private final CategoryRepository categoryRepository;
 
+    private final MetadataServiceConnector metadataServiceConnector;
+
     public MovieServiceImpl(
             MovieRepository movieRepository,
-            CategoryRepository categoryRepository
+            CategoryRepository categoryRepository,
+            MetadataServiceConnector metadataServiceConnector
     ) {
         this.movieRepository = movieRepository;
         this.categoryRepository = categoryRepository;
+        this.metadataServiceConnector = metadataServiceConnector;
     }
 
     @Override
@@ -77,6 +83,30 @@ public class MovieServiceImpl implements MovieService {
     @Override
     public Optional<MovieModel> getMovieById(Long movieId) {
         return this.movieRepository.findMovieByIdWithCategories(movieId);
+    }
+
+    @Override
+    public Optional<MovieResponseDto> getMovieDetailById(Long movieId) {
+        MovieModel movie = this.movieRepository.findMovieByIdWithCategories(movieId)
+                .orElseThrow(() -> new NotFoundException(TABLE_MOVIE, movieId));
+
+        MovieResponseDto.MetadataResponseDto metadata = null;
+        try {
+            if (movie.getMetadataId() != null) {
+                metadata = this.metadataServiceConnector.getMetadata(movie.getMetadataId()).getBody();
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch metadata for movieId={}, metadataId={}: {}",
+                    movieId, movie.getMetadataId(), e.getMessage());
+            if (e instanceof FeignException fe) {
+                log.error("Response: {}", fe.contentUTF8());
+            }
+        }
+
+        MovieResponseDto response = movie.toMovieResponseDto();
+        response.setMetadata(metadata);
+
+        return Optional.of(response);
     }
 
     @Override

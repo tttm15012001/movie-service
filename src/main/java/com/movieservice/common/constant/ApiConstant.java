@@ -6,4 +6,6 @@ public class ApiConstant {
     public final static String CAST_API_URL = "cast";
 
     public final static String CATEGORY_API_URL = "category";
+
+    public final static String METADATA_CONNECTOR_PATH = "/metadata";
 }
