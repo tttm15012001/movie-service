@@ -54,6 +54,14 @@ Parameters:
     Type: String
     Description: "Health Check Period"
     Default: 60
+  KafkaSsmPath:
+    Type: String
+    Description: "Kafka Server SSM Path"
+    Default: "/ryan-movie/kafka-server"
+  KeyCrawlMovieSsmPath:
+    Type: String
+    Description: "Key Crawl Movies SSM Path"
+    Default: "/ryan-movie/key-crawl-movie"
 
   # --- For Metadata Svc ---
   MetadataServiceName:
@@ -71,6 +79,10 @@ Parameters:
     Type: Number
     Description: "Container Port - Metadata Svc"
     Default: 8083
+  TmdbToken:
+    Type: String
+    Default: eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmZjdmY2Q2ZmZiZjFkOTJiMzY1MjI0ZmRlNjAwMzk2YiIsIm5iZiI6MTc2MDc1MTE0My43OTcsInN1YiI6IjY4ZjJlZTI3OTE2MTljZTJlNGJkODUyMyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.xzCEp1-ETignfgcB5kqxbSD5KbngIx2h23ME9ZW2_1A
+    NoEcho: true
 
   # --- For Transcoder ---
   SourceBucketName:
@@ -122,6 +134,12 @@ Resources:
       Name: !Sub "/${ProjectTitle}/db-pass"
       Type: String
       Value: !Ref DbPass
+  TmdbTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectTitle}/tmdb-token"
+      Type: String
+      Value: !Ref TmdbToken
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -609,9 +627,15 @@ Resources:
               Value: !Ref DbUser
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
+            - Name: CLUSTER_ALB
+              Value: !Sub "https://${RyanMovieAlb.DNSName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
+            - Name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              ValueFrom: !Ref KafkaSsmPath
+            - Name: KEY_CRAWL_MOVIE
+              ValueFrom: !Ref KeyCrawlMovieSsmPath
           PortMappings:
             - ContainerPort: !Ref MovieContainerPort
               HostPort: !Ref MovieContainerPort
@@ -715,9 +739,15 @@ Resources:
               Value: !Ref DbUser
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
+            - Name: CLUSTER_ALB
+              Value: !Sub "https://${RyanMovieAlb.DNSName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
+            - Name: TMDB_TOKEN
+              ValueFrom: !Ref TmdbTokenParameter
+            - Name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              ValueFrom: !Ref KafkaSsmPath
           PortMappings:
             - ContainerPort: !Ref MetadataContainerPort
               HostPort: !Ref MetadataContainerPort

@@ -18,6 +18,8 @@ public interface MovieService {
 
     Optional<MovieModel> getMovieById(Long movieId);
 
+    Optional<MovieResponseDto> getMovieDetailById(Long movieId);
+
     MovieResponseDto createMovie(MovieRequest movieRequest);
 
     ResponseEntity<ManifestResponseDto> getManifestFromMovieName(String movieName) throws Exception;

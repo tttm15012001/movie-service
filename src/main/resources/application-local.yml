@@ -35,6 +35,13 @@ config:
   crawl:
     current-year: 2025
 
+connector:
+  alb:
+    url: localhost
+  metadata:
+    service:
+      port: 8083
+
 aws:
   region: ap-southeast-1
   s3:

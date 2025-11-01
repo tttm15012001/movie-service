@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: none
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -32,6 +32,14 @@ config:
       top: 10
   crawl:
     current-year: 2025
+    key: ${KEY_CRAWL_MOVIE}
+
+connector:
+  alb:
+    url: ${CLUSTER_ALB}
+  metadata:
+    service:
+      port: 8083
 
 aws:
   region: ap-southeast-1
