@@ -619,6 +619,8 @@ Resources:
               Value: !Ref DbUser
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
+            - Name: CLUSTER_ALB
+              Value: !Sub "https://${RyanMovieAlb.DNSName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
@@ -725,6 +727,8 @@ Resources:
               Value: !Ref DbUser
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
+            - Name: CLUSTER_ALB
+              Value: !Sub "https://${RyanMovieAlb.DNSName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
