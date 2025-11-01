@@ -10,7 +10,7 @@ import static com.movieservice.common.constant.ApiConstant.METADATA_CONNECTOR_PA
 
 @FeignClient(
         name = "metadata-service",
-        url = "${connector.metadata.service.url}" + METADATA_CONNECTOR_PATH
+        url = "${connector.alb.url}:${connector.metadata.service.port}" + METADATA_CONNECTOR_PATH
 )
 public interface MetadataServiceConnector {
 

@@ -36,9 +36,11 @@ config:
     current-year: 2025
 
 connector:
+  alb:
+    url: localhost
   metadata:
     service:
-      url: localhost:8083
+      port: 8083
 
 aws:
   region: ap-southeast-1

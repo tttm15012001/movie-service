@@ -34,9 +34,11 @@ config:
     current-year: 2025
 
 connector:
+  alb:
+    url: ${CLUSTER_ALB}
   metadata:
     service:
-      url: ${METADATA_SERVICE_URL}
+      port: 8083
 
 aws:
   region: ap-southeast-1
