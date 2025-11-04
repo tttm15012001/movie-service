@@ -172,7 +172,7 @@ Resources:
         - Key: Name
           Value: !Sub "${MovieServiceName}-rds"
 
-  # --- VPC / Subnets / Route Table / Internet Gateway---
+  # --- VPC / Subnets / Route Table / Internet Gateway / Nat Gateway ---
   RyanMovieVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -187,6 +187,7 @@ Resources:
     Properties:
       VpcId: !Ref RyanMovieVPC
       CidrBlock: "10.0.1.0/24"
+      MapPublicIpOnLaunch: true
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -196,6 +197,7 @@ Resources:
     Properties:
       VpcId: !Ref RyanMovieVPC
       CidrBlock: "10.0.2.0/24"
+      MapPublicIpOnLaunch: true
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
@@ -229,6 +231,15 @@ Resources:
     Properties:
       VpcId: !Ref RyanMovieVPC
       InternetGatewayId: !Ref InternetGateway
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
   RouteTablePublicSubnet:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -243,6 +254,13 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${ProjectTitle}-rt-private-subnet"
+  RoutePrivateSubnetDefaultIpv4:
+    Type: AWS::EC2::Route
+    DependsOn: NatGateway
+    Properties:
+      RouteTableId: !Ref RouteTablePrivateSubnet
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
   RoutePublicSubnetDefaultIpv4:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
@@ -358,6 +376,18 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${ProjectTitle}-interface-endpoint-ec2messages"
+  InterfaceEndpointSSMMessages:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref RyanMovieVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      SecurityGroupIds:
+        - !Ref SecurityGroupInterfaceEndpoint
+      PrivateDnsEnabled: true
 
   # --- Security Groups ---
   SecurityGroupRds:
@@ -444,6 +474,16 @@ Resources:
       FromPort: 443
       ToPort: 443
       SourceSecurityGroupId: !Ref SecurityGroupClusterService
+
+  # Interface Endpoint -> allow ingress from Session Manager
+  InterfaceEndpointIngressFromSessionManager:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupInterfaceEndpoint
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref KafkaSecurityGroup
 
   # --- Application Load Balancer ---
   RyanMovieAlb:
@@ -653,6 +693,7 @@ Resources:
       - RyanMovieAlb
       - AlbListenerMovie
       - RdsInstance
+      - KafkaInstance
     Properties:
       Cluster: !Ref EcsCluster
       ServiceName: !Sub "${MovieServiceName}-service"
@@ -765,6 +806,7 @@ Resources:
       - RyanMovieAlb
       - AlbListenerMovie
       - MetadataRdsInstance
+      - KafkaInstance
     Properties:
       Cluster: !Ref MetadataEcsCluster
       ServiceName: !Sub "${MetadataServiceName}-service"
@@ -1341,6 +1383,108 @@ Resources:
           AcmCertificateArn: !Ref FeCertificateArn
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
+
+  # ------------------------------- Private Kafka EC2 -------------------------------
+  KafkaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow ECS services to connect to private Kafka broker"
+      VpcId: !Ref RyanMovieVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 9092
+          ToPort: 9092
+          SourceSecurityGroupId: !Ref SecurityGroupClusterService
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  KafkaEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  KafkaEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref KafkaEC2Role
+
+  KafkaInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.small
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds:
+        - !Ref KafkaSecurityGroup
+      IamInstanceProfile: !Ref KafkaEC2InstanceProfile
+      KeyName: ryan-movie-key-pair
+      ImageId: ami-00d8fc944fb171e29
+      PrivateIpAddress: 10.0.3.50
+      Tags:
+        - Key: Name
+          Value: "RyanMovie-Kafka-Broker"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          sudo echo "=== [1] Installing Docker on Ubuntu ==="
+          sudo apt-get update -y
+          sudo apt-get install -y docker.io
+          sudo apt-get install -y docker-compose
+          sudo systemctl enable docker
+          sudo systemctl start docker
+
+          sudo mkdir -p /opt/kafka
+          cd /opt/kafka
+          
+          sudo bash -c 'cat > docker-compose.yml <<EOF
+          version: "3.8"
+          services:
+            zookeeper:
+              image: confluentinc/cp-zookeeper:7.6.1
+              container_name: zookeeper
+              environment:
+                ZOOKEEPER_CLIENT_PORT: 2181
+                ZOOKEEPER_TICK_TIME: 2000
+              network_mode: host
+          
+            kafka:
+              image: confluentinc/cp-kafka:7.6.1
+              container_name: kafka
+              depends_on:
+                - zookeeper
+              environment:
+                KAFKA_BROKER_ID: 1
+                KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+                KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+                KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://10.0.3.50:9092
+                KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+                KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+                KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+              network_mode: host
+          EOF'
+          
+          sudo echo "=== [3] Launching Kafka & Zookeeper ==="
+          sudo docker-compose up -d
+          
+          sudo echo "=== [4] Containers running: ==="
+          sudo docker ps
+          
+          sudo echo "Kafka broker started successfully at 10.0.3.50:9092"
 
   # --- Route 53 Record ---
   AliasAlbRecord:
