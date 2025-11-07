@@ -87,7 +87,7 @@ Parameters:
   # --- For Transcoder ---
   SourceBucketName:
     Type: String
-    Default: ryan-movie-transcoder-source
+    Default: ryan-movie-transcoder
   TranscoderEventBusName:
     Type: String
     Default: transcoder-event-bus
@@ -115,7 +115,7 @@ Parameters:
   # --- For FE ---
   SourceFeBucketName:
     Type: String
-    Default: fe.ryan-healthcare.com
+    Default: movie.ryan-healthcare.com
   FeCertificateArn:
     Type: String
     Description: "ACM Certificate ARN for FE"
@@ -668,7 +668,7 @@ Resources:
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
             - Name: CLUSTER_ALB
-              Value: !Sub "https://${RyanMovieAlb.DNSName}"
+              Value: !Sub "https://${AlbDomainName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
