@@ -38,11 +38,11 @@ Parameters:
     Type: Number
     Description: "Container Port - Spring Boot App Port"
     Default: 8082
-  AlbCertificateArn:
+  ApiCertificateArn:
     Type: String
-    Description: "ACM Certificate ARN for ALB HTTPS listener"
+    Description: "ACM Certificate ARN for API GW"
     Default: "arn:aws:acm:ap-southeast-1:703671925000:certificate/798c67f8-4bb3-4a6b-b2db-93ad2da19ee2"
-  AlbDomainName:
+  ApiDomainName:
     Type: String
     Description: "Domain Name"
     Default: "api.ryan-healthcare.com"
@@ -126,53 +126,7 @@ Parameters:
     Default: "ryan-healthcare.com"
 
 Resources:
-  # ------------------------------- Resources For Movie Svc -------------------------------
-  # --- Mysql RDS DB ---
-  DbPassParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/${ProjectTitle}/db-pass"
-      Type: String
-      Value: !Ref DbPass
-  TmdbTokenParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/${ProjectTitle}/tmdb-token"
-      Type: String
-      Value: !Ref TmdbToken
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: !Sub "${ProjectTitle} RDS subnet group"
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
-      DBSubnetGroupName: !Sub "${ProjectTitle}-db-subnet-group"
-  RdsInstance:
-    Type: AWS::RDS::DBInstance
-    DependsOn: DBSubnetGroup
-    Properties:
-      DBInstanceIdentifier: !Sub "${MovieServiceName}-database"
-      Engine: mysql
-      EngineVersion: "8.0.42"
-      DBInstanceClass: db.t3.micro
-      AllocatedStorage: 20
-      StorageType: gp2
-      MasterUsername: !Ref DbUser
-      MasterUserPassword: !Ref DbPass
-      DBName: !Ref DbName
-      VPCSecurityGroups:
-        - !Ref SecurityGroupRds
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      MultiAZ: false
-      PubliclyAccessible: false
-      DeletionProtection: false
-      BackupRetentionPeriod: 1
-      Tags:
-        - Key: Name
-          Value: !Sub "${MovieServiceName}-rds"
-
-  # --- VPC / Subnets / Route Table / Internet Gateway / Nat Gateway ---
+  # ----------------------------------------- VPC / Subnets / Route Table / Internet Gateway / Nat Gateway -----------------------------------------
   RyanMovieVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -289,7 +243,7 @@ Resources:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref RouteTablePrivateSubnet
 
-  # --- VPC Endpoints ---
+  # ----------------------------------------- VPC Endpoints -----------------------------------------
   InterfaceEndpointEcrApi:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -389,7 +343,7 @@ Resources:
         - !Ref SecurityGroupInterfaceEndpoint
       PrivateDnsEnabled: true
 
-  # --- Security Groups ---
+  # ----------------------------------------- Security Groups -----------------------------------------
   SecurityGroupRds:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -414,18 +368,7 @@ Resources:
       GroupDescription: "Security Group For Interface Endpoint - Allow For SG ECS Task"
       VpcId: !Ref RyanMovieVPC
 
-  # --- Security Group Rules ---
-
-  # ALB ingress (từ internet)
-  AlbIngress443:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref SecurityGroupPublicAlb
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      CidrIp: 0.0.0.0/0
-
+  # ----------------------------------------- Security Group Rules -----------------------------------------
   AlbIngressFromPort8082ToPort8085:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -435,7 +378,6 @@ Resources:
       ToPort: 8085
       CidrIp: 0.0.0.0/0
 
-  # SG public ALB -> allow egress to SG Cluster Services
   PublicAlbEgressToClusterServices:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -445,7 +387,6 @@ Resources:
       ToPort: 10000
       DestinationSecurityGroupId: !Ref SecurityGroupClusterService
 
-  # SG Cluster Services -> allow ingress from SG public ALB
   ClusterServicesIngressFromPublicAlb:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -455,7 +396,6 @@ Resources:
       ToPort: 10000
       SourceSecurityGroupId: !Ref SecurityGroupPublicAlb
 
-  # RDS -> allow ingress from SG Cluster Services
   RdsIngressFromEcs:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -465,7 +405,6 @@ Resources:
       ToPort: 3306
       SourceSecurityGroupId: !Ref SecurityGroupClusterService
 
-  # Interface Endpoint -> allow ingress from SG Cluster Services
   InterfaceEndpointIngressFromEcs:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -475,7 +414,6 @@ Resources:
       ToPort: 443
       SourceSecurityGroupId: !Ref SecurityGroupClusterService
 
-  # Interface Endpoint -> allow ingress from Session Manager
   InterfaceEndpointIngressFromSessionManager:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -485,18 +423,18 @@ Resources:
       ToPort: 443
       SourceSecurityGroupId: !Ref KafkaSecurityGroup
 
-  # --- Application Load Balancer ---
+  # ----------------------------------------- Internal Application Load Balancer -----------------------------------------
   RyanMovieAlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ProjectTitle}-alb"
-      Scheme: internet-facing
+      Scheme: internal
       Type: application
       SecurityGroups:
         - !Ref SecurityGroupPublicAlb
       Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
       Tags:
         - Key: Name
           Value: !Sub "${ProjectTitle}-alb"
@@ -522,28 +460,12 @@ Resources:
       HealthCheckPath: "/health"
       Matcher:
         HttpCode: "200-399"
-  AlbListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref RyanMovieAlb
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref AlbCertificateArn
-      DefaultActions:
-        - Type: fixed-response
-          FixedResponseConfig:
-            StatusCode: 404
-            ContentType: text/plain
-            MessageBody: "Not Found"
   AlbListenerMovie:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref RyanMovieAlb
       Port: !Ref MovieContainerPort
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref AlbCertificateArn
+      Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AlbTargetGroupMovie
@@ -552,9 +474,7 @@ Resources:
     Properties:
       LoadBalancerArn: !Ref RyanMovieAlb
       Port: !Ref MetadataContainerPort
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref AlbCertificateArn
+      Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AlbTargetGroupMetadata
@@ -565,13 +485,266 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: "443"
-            StatusCode: HTTP_301
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 404
+            ContentType: text/plain
+            MessageBody: "Not Found"
+  AlbListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref RyanMovieAlb
+      Port: 443
+      Protocol: HTTPS
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 404
+            ContentType: text/plain
+            MessageBody: "Not Found"
 
-  # --- ECS Cluster / Task / Service / Role for ECS Task ---
+  # ----------------------------------------- CloudFront -----------------------------------------
+  HlsCorsHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: hls-cors
+        Comment: "CORS for HLS (.m3u8, .ts)"
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items:
+              - !Sub "https://${FeCdnDomainName}"
+          AccessControlAllowHeaders:
+            Items:
+              - Content-Type
+              - Authorization
+              - Range
+              - Accept
+              - Origin
+              - Referer
+          AccessControlAllowMethods:
+            Items:
+              - GET
+              - HEAD
+              - OPTIONS
+          AccessControlAllowCredentials: true
+          OriginOverride: true
+  CloudFrontPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref "AWS::StackName"
+        Name: ryan-movie-public-key
+        EncodedKey: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArf9T/9CDN322oypR+yw7umnu5z0UErpKoXErNfj0RelwxHRxYrHPsGpuig4aNFuRgcEZo77iWMkp9qw+UAQpSe3oDq0LsCHRupmDQp6Z2FkktDEVpa/u/8ndjAKyerQjsfgxHhHtvddG09gDJVUTqwe2pONfdwaCGNeCGDAdaoG0dlIBhGO1xW7mKsZ4eU8or5DyIQs712QrtznOmov0YGDL5wWMQqYA+XUDf/MDa/OvRLrsm7rfjEKcFUmjmfufRcBnRFW6JP9GYEBMhMxZyET/7W60AeN6541rJj6k5oYaPoDG9D/tBreW+RzTcWrSOyhkUAsOm6JMv7itPTPfTwIDAQAB
+          -----END PUBLIC KEY-----
+        Comment: "Public key for signed URL"
+  CloudFrontKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Ref PublicKeyName
+        Items:
+          - !Ref CloudFrontPublicKey
+        Comment: "Key group for signed URL/ signed cookie"
+  TranscoderCloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectTitle}-transcoder-oac"
+        Description: !Sub "OAC for ${ProjectTitle} transcoder"
+        SigningProtocol: sigv4
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3
+  TranscoderCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: TranscoderCloudFrontOAC
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: "CloudFront for ryan-movie HLS streaming"
+        Aliases:
+          - !Ref CdnDomainName
+        Origins:
+          - Id: MovieS3Origin
+            DomainName: !Sub "${SourceBucketName}.s3.${AWS::Region}.amazonaws.com"
+            OriginAccessControlId: !Ref TranscoderCloudFrontOAC
+            S3OriginConfig: { }
+        DefaultCacheBehavior:
+          TargetOriginId: MovieS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [ GET, HEAD, OPTIONS ]
+          CachedMethods: [ GET, HEAD ]
+          ForwardedValues:
+            QueryString: false
+          TrustedKeyGroups:
+            - !Ref CloudFrontKeyGroup
+          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CdnCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+  FeCloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectTitle}-fe-oac"
+        Description: !Sub "OAC for ${ProjectTitle} frontend"
+        SigningProtocol: sigv4
+        SigningBehavior: always
+        OriginAccessControlOriginType: s3
+  FeCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - FeCloudFrontOAC
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "CloudFront for ${ProjectTitle} frontend"
+        DefaultRootObject: index.html
+        Aliases:
+          - !Ref FeCdnDomainName
+        Origins:
+          - Id: FeS3Origin
+            DomainName: !Sub "${SourceFe}.s3.${AWS::Region}.amazonaws.com"
+            OriginAccessControlId: !Ref FeCloudFrontOAC
+            S3OriginConfig: { }
+        DefaultCacheBehavior:
+          TargetOriginId: FeS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [ GET, HEAD, OPTIONS ]
+          CachedMethods: [ GET, HEAD ]
+          ForwardedValues:
+            QueryString: false
+          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+            ErrorCachingMinTTL: 0
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref FeCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  # ----------------------------------------- API Gateway -----------------------------------------
+  RyanMovieHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${ProjectTitle}-http-api"
+      ProtocolType: HTTP
+      Description: HTTP API Gateway exposing ECS services via VPC Link
+  VpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub "${ProjectTitle}-vpc-link"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      SecurityGroupIds:
+        - !Ref SecurityGroupClusterService
+  MovieApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref VpcLink
+      IntegrationUri: !Sub "http://${RyanMovieAlbDns}:${MovieContainerPort}"
+      PayloadFormatVersion: "1.0"
+      Description: Proxy integration for movie service
+  MetadataApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref VpcLink
+      IntegrationUri: !Sub "http://${RyanMovieAlbDns}:${MetadataContainerPort}"
+      PayloadFormatVersion: "1.0"
+      Description: Proxy integration for metadata service
+  MovieApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      RouteKey: "ANY /movie/{proxy+}"
+      Target: !Sub "integrations/${MovieApiIntegration}"
+  MetadataApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      RouteKey: "ANY /metadata/{proxy+}"
+      Target: !Sub "integrations/${MetadataApiIntegration}"
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      StageName: prod
+      AutoDeploy: true
+      Description: Production stage for Ryan Movie API
+  ApiDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Ref ApiDomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref ApiCertificateArn
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+  ApiDomainMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref RyanMovieHttpApi
+      DomainName: !Ref ApiDomain
+      Stage: !Ref ApiStage
+      ApiMappingKey: ""
+
+  # ----------------------------------------- Resources For Movie Svc -----------------------------------------
+  DbPassParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectTitle}/db-pass"
+      Type: String
+      Value: !Ref DbPass
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ProjectTitle} RDS subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      DBSubnetGroupName: !Sub "${ProjectTitle}-db-subnet-group"
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: DBSubnetGroup
+    Properties:
+      DBInstanceIdentifier: !Sub "${MovieServiceName}-database"
+      Engine: mysql
+      EngineVersion: "8.0.42"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MasterUsername: !Ref DbUser
+      MasterUserPassword: !Ref DbPass
+      DBName: !Ref DbName
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRds
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      BackupRetentionPeriod: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${MovieServiceName}-rds"
   EcsTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -668,7 +841,7 @@ Resources:
             - Name: KEY_PAIR_ID
               Value: !Ref CloudFrontPublicKey
             - Name: CLUSTER_ALB
-              Value: !Sub "https://${AlbDomainName}"
+              Value: !Sub "http://${RyanMovieAlb.DNSName}"
           Secrets:
             - Name: DB_PASS
               ValueFrom: !Ref DbPassParameter
@@ -680,12 +853,12 @@ Resources:
             - ContainerPort: !Ref MovieContainerPort
               HostPort: !Ref MovieContainerPort
               Protocol: tcp
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Sub "/ecs/${MovieServiceName}"
-              awslogs-region: ap-southeast-1
-              awslogs-stream-prefix: !Sub "${MovieServiceName}-container"
+#          LogConfiguration:
+#            LogDriver: awslogs
+#            Options:
+#              awslogs-group: !Sub "/ecs/${MovieServiceName}"
+#              awslogs-region: ap-southeast-1
+#              awslogs-stream-prefix: !Sub "${MovieServiceName}-container"
   MovieService:
     Type: AWS::ECS::Service
     DependsOn:
@@ -717,8 +890,7 @@ Resources:
           ContainerName: !Sub "${MovieServiceName}-container"
           ContainerPort: !Ref MovieContainerPort
 
-  # ------------------------------- Resource For Metadata Svc -------------------------------
-  # --- Mysql RDS DB ---
+  # ----------------------------------------- Resource For Metadata Svc -----------------------------------------
   MetadataRdsInstance:
     Type: AWS::RDS::DBInstance
     DependsOn: DBSubnetGroup
@@ -742,8 +914,12 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${MetadataServiceName}-rds"
-
-  # --- ECS Cluster / Task / Service ---
+  TmdbTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectTitle}/tmdb-token"
+      Type: String
+      Value: !Ref TmdbToken
   MetadataEcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -793,18 +969,18 @@ Resources:
             - ContainerPort: !Ref MetadataContainerPort
               HostPort: !Ref MetadataContainerPort
               Protocol: tcp
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Sub "/ecs/${MetadataServiceName}"
-              awslogs-region: ap-southeast-1
-              awslogs-stream-prefix: !Sub "${MetadataServiceName}-container"
+#          LogConfiguration:
+#            LogDriver: awslogs
+#            Options:
+#              awslogs-group: !Sub "/ecs/${MetadataServiceName}"
+#              awslogs-region: ap-southeast-1
+#              awslogs-stream-prefix: !Sub "${MetadataServiceName}-container"
   MetadataService:
     Type: AWS::ECS::Service
     DependsOn:
       - MetadataECSTaskDefinition
       - RyanMovieAlb
-      - AlbListenerMovie
+      - AlbListenerMetadata
       - MetadataRdsInstance
       - KafkaInstance
     Properties:
@@ -830,8 +1006,7 @@ Resources:
           ContainerName: !Sub "${MetadataServiceName}-container"
           ContainerPort: !Ref MetadataContainerPort
 
-  # ------------------------------- For Transcoder -------------------------------
-  # --- S3 Bucket ---
+  # ----------------------------------------- Resources For Transcoder -----------------------------------------
   SourceMovie:
     Type: AWS::S3::Bucket
     Properties:
@@ -871,8 +1046,6 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
-
-  # --- Event Bus Rule ---
   TranscoderEventBus:
     Type: AWS::Events::EventBus
     Properties:
@@ -951,8 +1124,6 @@ Resources:
         - Arn: !GetAtt TranscoderQueue.Arn
           Id: ForwardToTranscoderSqs
           RoleArn: !GetAtt EventBridgeToSqsRole.Arn
-
-  # --- Transcoder Lambda ---
   TranscoderLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1079,7 +1250,7 @@ Resources:
       FunctionName: !Ref TranscoderLambda
       Enabled: true
 
-  # --- Convert Job ---
+  # ----------------------------------------- Convert Job -----------------------------------------
   MediaConvertRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1225,92 +1396,7 @@ Resources:
                         SampleRate: 48000
                         Specification: MPEG4
 
-  # --- CloudFront ---
-  HlsCorsHeadersPolicy:
-    Type: AWS::CloudFront::ResponseHeadersPolicy
-    Properties:
-      ResponseHeadersPolicyConfig:
-        Name: hls-cors
-        Comment: "CORS for HLS (.m3u8, .ts)"
-        CorsConfig:
-          AccessControlAllowOrigins:
-            Items:
-              - !Sub "https://${FeCdnDomainName}"
-          AccessControlAllowHeaders:
-            Items:
-              - Content-Type
-              - Authorization
-              - Range
-              - Accept
-              - Origin
-              - Referer
-          AccessControlAllowMethods:
-            Items:
-              - GET
-              - HEAD
-              - OPTIONS
-          AccessControlAllowCredentials: true
-          OriginOverride: true
-  CloudFrontPublicKey:
-    Type: AWS::CloudFront::PublicKey
-    Properties:
-      PublicKeyConfig:
-        CallerReference: !Ref "AWS::StackName"
-        Name: ryan-movie-public-key
-        EncodedKey: |
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArf9T/9CDN322oypR+yw7umnu5z0UErpKoXErNfj0RelwxHRxYrHPsGpuig4aNFuRgcEZo77iWMkp9qw+UAQpSe3oDq0LsCHRupmDQp6Z2FkktDEVpa/u/8ndjAKyerQjsfgxHhHtvddG09gDJVUTqwe2pONfdwaCGNeCGDAdaoG0dlIBhGO1xW7mKsZ4eU8or5DyIQs712QrtznOmov0YGDL5wWMQqYA+XUDf/MDa/OvRLrsm7rfjEKcFUmjmfufRcBnRFW6JP9GYEBMhMxZyET/7W60AeN6541rJj6k5oYaPoDG9D/tBreW+RzTcWrSOyhkUAsOm6JMv7itPTPfTwIDAQAB
-          -----END PUBLIC KEY-----
-        Comment: "Public key for signed URL"
-  CloudFrontKeyGroup:
-    Type: AWS::CloudFront::KeyGroup
-    Properties:
-      KeyGroupConfig:
-        Name: !Ref PublicKeyName
-        Items:
-          - !Ref CloudFrontPublicKey
-        Comment: "Key group for signed URL/ signed cookie"
-  TranscoderCloudFrontOAC:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Name: !Sub "${ProjectTitle}-transcoder-oac"
-        Description: !Sub "OAC for ${ProjectTitle} transcoder"
-        SigningProtocol: sigv4
-        SigningBehavior: always
-        OriginAccessControlOriginType: s3
-  TranscoderCloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    DependsOn: TranscoderCloudFrontOAC
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: "CloudFront for ryan-movie HLS streaming"
-        Aliases:
-          - !Ref CdnDomainName
-        Origins:
-          - Id: MovieS3Origin
-            DomainName: !Sub "${SourceBucketName}.s3.${AWS::Region}.amazonaws.com"
-            OriginAccessControlId: !Ref TranscoderCloudFrontOAC
-            S3OriginConfig: {}
-        DefaultCacheBehavior:
-          TargetOriginId: MovieS3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [ GET, HEAD, OPTIONS ]
-          CachedMethods: [ GET, HEAD ]
-          ForwardedValues:
-            QueryString: false
-          TrustedKeyGroups:
-            - !Ref CloudFrontKeyGroup
-          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
-        PriceClass: PriceClass_100
-        ViewerCertificate:
-          AcmCertificateArn: !Ref CdnCertificateArn
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
-
-  # ------------------------------ For FE ------------------------------
-  # --- S3 Bucket ---
+  # ----------------------------------------- Resources For FE -----------------------------------------
   SourceFe:
     Type: AWS::S3::Bucket
     Properties:
@@ -1335,56 +1421,7 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub "arn:aws:cloudfront::${AccountId}:distribution/${FeCloudFrontDistribution}"
 
-  # --- CloudFront ---
-  FeCloudFrontOAC:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Name: !Sub "${ProjectTitle}-fe-oac"
-        Description: !Sub "OAC for ${ProjectTitle} frontend"
-        SigningProtocol: sigv4
-        SigningBehavior: always
-        OriginAccessControlOriginType: s3
-  FeCloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    DependsOn:
-      - FeCloudFrontOAC
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: !Sub "CloudFront for ${ProjectTitle} frontend"
-        DefaultRootObject: index.html
-        Aliases:
-          - !Ref FeCdnDomainName
-        Origins:
-          - Id: FeS3Origin
-            DomainName: !Sub "${SourceFe}.s3.${AWS::Region}.amazonaws.com"
-            OriginAccessControlId: !Ref FeCloudFrontOAC
-            S3OriginConfig: {}
-        DefaultCacheBehavior:
-          TargetOriginId: FeS3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [ GET, HEAD, OPTIONS ]
-          CachedMethods: [ GET, HEAD ]
-          ForwardedValues:
-            QueryString: false
-          ResponseHeadersPolicyId: !Ref HlsCorsHeadersPolicy
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponsePagePath: "/index.html"
-            ResponseCode: 200
-            ErrorCachingMinTTL: 0
-          - ErrorCode: 404
-            ResponsePagePath: "/index.html"
-            ResponseCode: 200
-            ErrorCachingMinTTL: 0
-        PriceClass: PriceClass_100
-        ViewerCertificate:
-          AcmCertificateArn: !Ref FeCertificateArn
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
-
-  # ------------------------------- Private Kafka EC2 -------------------------------
+  # ----------------------------------------- Private Kafka EC2 -----------------------------------------
   KafkaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -1484,17 +1521,7 @@ Resources:
           
           sudo echo "Kafka broker started successfully at 10.0.3.50:9092"
 
-  # --- Route 53 Record ---
-  AliasAlbRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref AlbDomainName
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt RyanMovieAlb.DNSName
-        HostedZoneId: !GetAtt RyanMovieAlb.CanonicalHostedZoneID
-        EvaluateTargetHealth: true
+  # ----------------------------------------- Route 53 Record -----------------------------------------
   AliasCdnRecord:
     Type: AWS::Route53::RecordSet
     DependsOn: TranscoderCloudFrontDistribution
@@ -1517,6 +1544,16 @@ Resources:
         DNSName: !GetAtt FeCloudFrontDistribution.DomainName
         HostedZoneId: !Ref CloudFrontHostedZoneId
         EvaluateTargetHealth: false
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApiDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: true
 
 Outputs:
   RdsEndpoint:
