@@ -496,6 +496,8 @@ Resources:
       LoadBalancerArn: !Ref RyanMovieAlb
       Port: 443
       Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ApiCertificateArn
       DefaultActions:
         - Type: fixed-response
           FixedResponseConfig:
@@ -658,7 +660,7 @@ Resources:
       IntegrationMethod: ANY
       ConnectionType: VPC_LINK
       ConnectionId: !Ref VpcLink
-      IntegrationUri: !Sub "http://${RyanMovieAlbDns}:${MovieContainerPort}"
+      IntegrationUri: !Ref AlbListenerMovie
       PayloadFormatVersion: "1.0"
       Description: Proxy integration for movie service
   MetadataApiIntegration:
@@ -669,7 +671,7 @@ Resources:
       IntegrationMethod: ANY
       ConnectionType: VPC_LINK
       ConnectionId: !Ref VpcLink
-      IntegrationUri: !Sub "http://${RyanMovieAlbDns}:${MetadataContainerPort}"
+      IntegrationUri: !Ref AlbListenerMetadata
       PayloadFormatVersion: "1.0"
       Description: Proxy integration for metadata service
   MovieApiRoute:
