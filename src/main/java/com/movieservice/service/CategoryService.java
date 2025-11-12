@@ -10,6 +10,8 @@ public interface CategoryService {
 
     CategoryResponseDto getCategoryById(Long categoryId);
 
+    List<CategoryModel> handleCategory(String categories);
+
     List<CategoryModel> findTopScoreCategory(int top);
 
     CategoryResponseDto createCategory(CategoryRequest categoryRequest);

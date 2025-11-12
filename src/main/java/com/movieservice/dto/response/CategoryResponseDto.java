@@ -16,7 +16,7 @@ public class CategoryResponseDto {
 
     private String name;
 
-    private CategoryEnum code;
+    private String code;
 
     private Float score;
 }

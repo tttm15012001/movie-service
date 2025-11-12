@@ -17,15 +17,11 @@ public class MovieResponseDto {
 
     private Long id;
 
-    private String searchTitle;
-
     private Integer releaseYear;
 
     private Double voteAverage;
 
     private Long metadataId;
-
-    private Integer numberOfEpisodes;
 
     private List<String> categories;
 
@@ -69,8 +65,6 @@ public class MovieResponseDto {
         private String country;
 
         private String originalLanguage;
-
-        private List<String> genre;
 
         private List<ActorResponseDto> actors;
 

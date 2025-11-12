@@ -16,7 +16,6 @@ CREATE TABLE movie (
     search_title VARCHAR(100),
     release_year INT,
     metadata_id BIGINT,
-    number_of_episodes INT,
     vote_average FLOAT,
     created_date DATETIME NOT NULL,
     last_modified_date DATETIME

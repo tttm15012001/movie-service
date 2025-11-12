@@ -46,9 +46,6 @@ public class MovieModel {
     @Column(name = "metadata_id")
     private Long metadataId;
 
-    @Column(name = "number_of_episodes")
-    private Integer numberOfEpisodes;
-
     @Column(name = "vote_average")
     protected Double voteAverage;
 
@@ -81,11 +78,9 @@ public class MovieModel {
     public MovieResponseDto toMovieResponseDto() {
         return MovieResponseDto.builder()
                 .id(this.getId())
-                .searchTitle(this.getSearchTitle())
                 .releaseYear(this.getReleaseYear())
                 .voteAverage(this.getVoteAverage())
                 .metadataId(this.getMetadataId())
-                .numberOfEpisodes(this.getNumberOfEpisodes())
                 .categories(this.categories != null
                         ? this.categories.stream()
                             .map(CategoryModel::getName)
