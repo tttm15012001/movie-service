@@ -36,6 +36,8 @@ public class CrawlMovieResultConsumer {
             movie.setMetadataId(message.getMetadataId());
             movie.setCategories(categoryModels);
             movie.setVoteAverage(message.getVoteAverage());
+            movie.setTitle(message.getTitle());
+            movie.setBackdrop(message.getBackdrop());
             this.movieService.saveMovie(movie);
         });
     }

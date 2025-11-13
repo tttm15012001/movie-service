@@ -17,6 +17,10 @@ public class MovieResponseDto {
 
     private Long id;
 
+    private String title;
+
+    private String backdrop;
+
     private Integer releaseYear;
 
     private Double voteAverage;

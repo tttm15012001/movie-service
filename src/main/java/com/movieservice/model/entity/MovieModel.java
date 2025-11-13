@@ -40,6 +40,12 @@ public class MovieModel {
     @Column(name = "search_title")
     private String searchTitle;
 
+    @Column(name = "title")
+    private String title;
+
+    @Column(name = "backdrop")
+    private String backdrop;
+
     @Column(name = "release_year")
     protected Integer releaseYear;
 
@@ -78,6 +84,8 @@ public class MovieModel {
     public MovieResponseDto toMovieResponseDto() {
         return MovieResponseDto.builder()
                 .id(this.getId())
+                .title(this.getTitle())
+                .backdrop(this.getBackdrop())
                 .releaseYear(this.getReleaseYear())
                 .voteAverage(this.getVoteAverage())
                 .metadataId(this.getMetadataId())
