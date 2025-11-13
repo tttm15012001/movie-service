@@ -6,7 +6,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.movieservice.dto.GenreDto;
-import com.movieservice.dto.request.CategoryRequest;
 import com.movieservice.dto.response.CategoryResponseDto;
 import com.movieservice.model.entity.CategoryModel;
 import com.movieservice.model.entity.Genre;
@@ -90,33 +89,5 @@ public class CategoryServiceImpl implements CategoryService {
     public List<CategoryModel> findTopScoreCategory(int top) {
         Pageable pageable = PageRequest.of(0, top);
         return this.categoryRepository.findAllByOrderByScoreDesc(pageable);
-    }
-
-    @Override
-    public CategoryResponseDto createCategory(CategoryRequest categoryRequest) {
-        CategoryModel categoryModel = CategoryModel.builder()
-                .name(categoryRequest.getName())
-                .code(categoryRequest.getCode())
-                .score(categoryRequest.getScore())
-                .build();
-
-        return this.categoryRepository.save(categoryModel).toCategoryResponseDto();
-    }
-
-    @Override
-    public List<CategoryResponseDto> createCategories(List<CategoryRequest> categoryRequests) {
-        List<CategoryModel> categoryModels = categoryRequests.stream()
-                .map(req -> CategoryModel.builder()
-                        .name(req.getName())
-                        .code(req.getCode())
-                        .score(req.getScore())
-                        .build())
-                .collect(Collectors.toList());
-
-        List<CategoryModel> saved = categoryRepository.saveAll(categoryModels);
-
-        return saved.stream()
-                .map(CategoryModel::toCategoryResponseDto)
-                .collect(Collectors.toList());
     }
 }

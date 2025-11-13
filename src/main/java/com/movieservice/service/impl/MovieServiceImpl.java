@@ -1,7 +1,6 @@
 package com.movieservice.service.impl;
 
 import com.movieservice.connector.MetadataServiceConnector;
-import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.ManifestResponseDto;
 import com.movieservice.dto.response.MovieResponseDto;
@@ -10,7 +9,6 @@ import com.movieservice.model.entity.MovieModel;
 import com.movieservice.repository.CategoryRepository;
 import com.movieservice.repository.MovieRepository;
 import com.movieservice.service.MovieService;
-import com.movieservice.utils.StringUtil;
 import com.movieservice.validation.exception.NotFoundException;
 import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
@@ -107,22 +105,6 @@ public class MovieServiceImpl implements MovieService {
         response.setMetadata(metadata);
 
         return Optional.of(response);
-    }
-
-    @Override
-    public MovieResponseDto createMovie(MovieRequest movieRequest) {
-        List<CategoryModel> categoryModels = movieRequest.getCategories().stream()
-            .map(code -> categoryRepository.findByCode(code)
-                .orElseThrow(() -> new NotFoundException("category", code.toString())))
-            .toList();
-
-        MovieModel movieModel = MovieModel.builder()
-                .searchTitle(movieRequest.getSearchTitle())
-                .releaseYear(movieRequest.getReleaseYear())
-                .categories(categoryModels)
-                .build();
-
-        return this.movieRepository.save(movieModel).toMovieResponseDto();
     }
 
     @Override

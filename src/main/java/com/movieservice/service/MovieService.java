@@ -1,6 +1,5 @@
 package com.movieservice.service;
 
-import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.ManifestResponseDto;
 import com.movieservice.dto.response.MovieResponseDto;
@@ -19,8 +18,6 @@ public interface MovieService {
     Optional<MovieModel> getMovieById(Long movieId);
 
     Optional<MovieResponseDto> getMovieDetailById(Long movieId);
-
-    MovieResponseDto createMovie(MovieRequest movieRequest);
 
     ResponseEntity<ManifestResponseDto> getManifestFromMovieName(String movieName) throws Exception;
 
