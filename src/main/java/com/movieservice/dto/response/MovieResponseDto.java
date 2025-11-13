@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -27,7 +28,9 @@ public class MovieResponseDto {
 
     private Long metadataId;
 
-    private List<String> categories;
+    private Long primaryCategory;
+
+    private List<Map<Long, String>> categories;
 
     private MetadataResponseDto metadata;
 

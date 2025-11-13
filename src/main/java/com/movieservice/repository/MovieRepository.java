@@ -23,10 +23,10 @@ public interface MovieRepository extends JpaRepository<MovieModel, Long> {
     @Query("""
         SELECT DISTINCT m FROM MovieModel m
         JOIN FETCH m.categories c
-        WHERE c.id = :categoryId
+        WHERE m.primaryCategoryId = :categoryId
         ORDER BY m.voteAverage DESC
     """)
-    List<MovieModel> findTopByCategoryOrderByRateScoreDesc(
+    List<MovieModel> findByPrimaryCategoryIdOrderByVoteAverageDesc(
             @Param("categoryId") Long categoryId,
             Pageable pageable
     );

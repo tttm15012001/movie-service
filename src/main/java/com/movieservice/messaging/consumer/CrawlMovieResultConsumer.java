@@ -34,10 +34,14 @@ public class CrawlMovieResultConsumer {
         this.movieService.getMovieById(message.getMovieId()).ifPresent(movie -> {
             List<CategoryModel> categoryModels = this.categoryService.handleCategory(message.getGenres());
             movie.setMetadataId(message.getMetadataId());
-            movie.setCategories(categoryModels);
-            movie.setVoteAverage(message.getVoteAverage());
             movie.setTitle(message.getTitle());
+            movie.setVoteAverage(message.getVoteAverage());
             movie.setBackdrop(message.getBackdrop());
+            movie.setCategories(categoryModels);
+            if (categoryModels.get(0) != null) {
+                movie.setPrimaryCategoryId(categoryModels.get(0).getId());
+            }
+
             this.movieService.saveMovie(movie);
         });
     }

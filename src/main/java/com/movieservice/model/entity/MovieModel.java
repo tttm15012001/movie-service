@@ -1,18 +1,7 @@
 package com.movieservice.model.entity;
 
 import com.movieservice.dto.response.MovieResponseDto;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Column;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +11,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static com.movieservice.common.constant.DatabaseConstants.TABLE_MOVIE;
 
@@ -63,6 +53,9 @@ public class MovieModel {
     )
     private List<CategoryModel> categories;
 
+    @Column(name = "primary_category_id")
+    private Long primaryCategoryId;
+
     @Column(name = "created_date", nullable = false, updatable = false)
     @CreatedDate
     protected LocalDateTime createdDate;
@@ -89,10 +82,12 @@ public class MovieModel {
                 .releaseYear(this.getReleaseYear())
                 .voteAverage(this.getVoteAverage())
                 .metadataId(this.getMetadataId())
-                .categories(this.categories != null
+                .primaryCategory(this.getPrimaryCategoryId())
+                .categories(
+                    this.categories != null
                         ? this.categories.stream()
-                            .map(CategoryModel::getName)
-                            .toList()
+                        .map(c -> Map.of(c.getId(), c.getName()))
+                        .toList()
                         : List.of())
                 .build();
     }

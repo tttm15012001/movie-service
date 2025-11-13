@@ -187,7 +187,7 @@ public class MovieServiceImpl implements MovieService {
 
     private Flux<List<MovieResponseDto>> getMoviesFlux(Long categoryId, int limit) {
         return Mono.fromCallable(() ->
-            movieRepository.findTopByCategoryOrderByRateScoreDesc(categoryId, PageRequest.of(0, limit))
+            movieRepository.findByPrimaryCategoryIdOrderByVoteAverageDesc(categoryId, PageRequest.of(0, limit))
                 .stream()
                 .map(MovieModel::toMovieResponseDto)
                 .toList()
