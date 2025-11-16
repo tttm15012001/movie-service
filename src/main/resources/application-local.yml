@@ -27,6 +27,16 @@ spring:
     listener:
       missing-topics-fatal: false
 
+quartz:
+  max-retry: 3
+  job:
+    fetch-metadata-job:
+      name: "FetchMetadataJob"
+      group: "daily"
+      description: "Job starts every 5 minutes to fetch metadata of movie which doesn't have metadata"
+      cron-expression: "0 0/5 * * * ?"
+      time-zone: "Asia/Ho_Chi_Minh"
+
 config:
   category:
     top: 3
@@ -34,6 +44,7 @@ config:
       top: 10
   crawl:
     current-year: 2025
+    key: MYIBWPKZBWXPR9VK16O8H0OJT9RVS5ZG
 
 connector:
   alb:

@@ -19,6 +19,8 @@ public interface MovieService {
 
     Optional<MovieResponseDto> getMovieDetailById(Long movieId);
 
+    void fetchMetadata(MovieModel movie);
+
     ResponseEntity<ManifestResponseDto> getManifestFromMovieName(String movieName) throws Exception;
 
     Flux<CategoryWithMoviesResponseDto> getTopMoviesFromCateList(List<CategoryModel> categories);
