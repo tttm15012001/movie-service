@@ -40,4 +40,8 @@ public interface MovieRepository extends JpaRepository<MovieModel, Long> {
     Optional<MovieModel> findBySearchTitleIgnoreCase(String title);
 
     List<MovieModel> findAllByMetadataIdIsNull();
+
+    boolean existsBySearchTitleIgnoreCase(String searchTitle);
+
+    boolean existsByMetadataId(Long metadataId);
 }

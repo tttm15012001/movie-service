@@ -851,6 +851,8 @@ Resources:
               ValueFrom: !Ref KafkaSsmPath
             - Name: KEY_CRAWL_MOVIE
               ValueFrom: !Ref KeyCrawlMovieSsmPath
+            - Name: TMDB_TOKEN
+              ValueFrom: !Ref TmdbTokenParameter
           PortMappings:
             - ContainerPort: !Ref MovieContainerPort
               HostPort: !Ref MovieContainerPort

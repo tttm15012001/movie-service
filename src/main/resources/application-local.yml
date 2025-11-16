@@ -30,11 +30,17 @@ spring:
 quartz:
   max-retry: 3
   job:
+    fetch-popular-movies:
+      name: "FetchPopularMovie"
+      group: "daily"
+      description: "Job starts at 00:05 AM VNT to get popular movies from TMDb"
+      cron-expression: "0 15 0 * * ?"
+      time-zone: "Asia/Ho_Chi_Minh"
     fetch-metadata-job:
       name: "FetchMetadataJob"
       group: "daily"
-      description: "Job starts every 5 minutes to fetch metadata of movie which doesn't have metadata"
-      cron-expression: "0 0/5 * * * ?"
+      description: "Job starts at 00:30 AM VNT to fetch metadata of movie which doesn't have metadata"
+      cron-expression: "0 20 0 * * ?"
       time-zone: "Asia/Ho_Chi_Minh"
 
 config:
@@ -45,6 +51,9 @@ config:
   crawl:
     current-year: 2025
     key: MYIBWPKZBWXPR9VK16O8H0OJT9RVS5ZG
+  tmdb:
+    base-url: https://api.themoviedb.org/3
+    token: ${TMDB_TOKEN}
 
 connector:
   alb:

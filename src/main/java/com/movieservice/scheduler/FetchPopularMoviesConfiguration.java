@@ -1,7 +1,7 @@
 package com.movieservice.scheduler;
 
 import com.movieservice.scheduler.job.BaseJobProperties;
-import com.movieservice.scheduler.job.FetchMetadataJob;
+import com.movieservice.scheduler.job.FetchPopularMoviesJob;
 import org.quartz.JobDetail;
 import org.quartz.JobBuilder;
 import org.quartz.Trigger;
@@ -15,13 +15,13 @@ import org.springframework.context.annotation.Configuration;
 import java.util.TimeZone;
 
 @Configuration
-@ConfigurationProperties(prefix = "quartz.job.fetch-metadata-job")
-public class FetchMetadataJobConfiguration extends BaseJobProperties {
+@ConfigurationProperties(prefix = "quartz.job.fetch-popular-movies")
+public class FetchPopularMoviesConfiguration extends BaseJobProperties {
 
     @Bean
-    @Qualifier("fetchMetadataDetail")
-    public JobDetail fetchMetadataJobDetail() {
-        return JobBuilder.newJob().ofType(FetchMetadataJob.class)
+    @Qualifier("fetchPopularMovies")
+    public JobDetail fetchPopularMoviesJobDetail() {
+        return JobBuilder.newJob().ofType(FetchPopularMoviesJob.class)
                 .storeDurably(true)
                 .requestRecovery(true)
                 .withIdentity(this.getName(), this.getGroup())
@@ -30,8 +30,8 @@ public class FetchMetadataJobConfiguration extends BaseJobProperties {
     }
 
     @Bean
-    public Trigger fetchMetadataTrigger(
-            @Qualifier("fetchMetadataDetail") JobDetail jobDetail
+    public Trigger fetchPopularMoviesTrigger(
+            @Qualifier("fetchPopularMovies") JobDetail jobDetail
     ) {
         return TriggerBuilder.newTrigger().withIdentity(this.getName(), this.getGroup())
                 .forJob(jobDetail)
@@ -41,4 +41,5 @@ public class FetchMetadataJobConfiguration extends BaseJobProperties {
                 .startNow()
                 .build();
     }
+
 }

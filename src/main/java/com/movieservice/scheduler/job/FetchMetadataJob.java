@@ -6,9 +6,12 @@ import com.movieservice.scheduler.Result;
 import com.movieservice.service.MovieService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+@Component
 @Slf4j
 public class FetchMetadataJob extends BaseJob {
 
@@ -16,6 +19,7 @@ public class FetchMetadataJob extends BaseJob {
 
     private final MovieService movieService;
 
+    @Autowired
     public FetchMetadataJob(
             MovieRepository movieRepository,
             MovieService movieService
