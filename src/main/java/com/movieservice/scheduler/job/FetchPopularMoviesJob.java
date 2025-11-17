@@ -9,14 +9,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.StreamSupport;
 
 @Slf4j
@@ -29,91 +31,89 @@ public class FetchPopularMoviesJob extends BaseJob {
     @Value("${config.tmdb.token}")
     private String tmdbToken;
 
-    private final RestTemplate restTemplate;
-
     private final MovieRepository movieRepository;
-
     private final ObjectMapper objectMapper;
 
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+
     @Autowired
-    public FetchPopularMoviesJob(RestTemplate restTemplate, MovieRepository movieRepository, ObjectMapper objectMapper) {
-        this.restTemplate = restTemplate;
+    public FetchPopularMoviesJob(MovieRepository movieRepository,
+                                 ObjectMapper objectMapper) {
         this.movieRepository = movieRepository;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public Result executeJob(JobExecutionContext context) {
-        log.info("==== FetchPopularMoviesJob START ====");
+        log.info("[{}] Executing job", context.getJobDetail().getKey().getName());
 
-        try {
-            List<JsonNode> items = fetchPopularMovies();
-            List<MovieModel> newMovies = convertNewMovies(items);
-            saveMovies(newMovies);
-
-            log.info("==== Saved {} new movies ====", newMovies.size());
-
-        } catch (Exception e) {
-            log.error("FetchPopularMoviesJob failed", e);
-        }
+        fetchPopularMoviesAsync()
+                .thenApply(this::toMovieModelList)
+                .thenAccept(this::saveMovies)
+                .exceptionally(err -> {
+                    log.error("[{}] Error while fetching movies", context.getJobDetail().getKey().getName());
+                    return null;
+                });
 
         return new Result(0, 0, 0, 0);
     }
 
-    private List<JsonNode> fetchPopularMovies() throws IOException {
+    private CompletableFuture<List<JsonNode>> fetchPopularMoviesAsync() {
         String url = baseUrl + "/tv/popular?language=en-US&page=1";
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + tmdbToken);
-        headers.set("Accept", "application/json");
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .header("Authorization", "Bearer " + tmdbToken)
+                .headers("Accept", "application/json")
+                .GET()
+                .build();
 
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-        ResponseEntity<String> response =
-                restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new IOException("TMDb TV popular fetch failed: " + response.getStatusCode());
-        }
-
-        JsonNode root = objectMapper.readTree(response.getBody());
-        JsonNode results = root.get("results");
-
-        if (results == null || !results.isArray()) return List.of();
-
-        return StreamSupport.stream(results.spliterator(), false).toList();
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(HttpResponse::body)
+                .thenApply(this::parsePopularMovies);
     }
 
-    private List<MovieModel> convertNewMovies(List<JsonNode> items) {
-        return items.stream()
-                .map(this::toMovieIfNew)
+    private List<JsonNode> parsePopularMovies(String json) {
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode results = root.get("results");
+
+            if (results == null || !results.isArray()) return List.of();
+
+            return StreamSupport.stream(results.spliterator(), false).toList();
+
+        } catch (Exception e) {
+            log.error("Error parsing TMDB JSON", e);
+            return List.of();
+        }
+    }
+
+    private List<MovieModel> toMovieModelList(List<JsonNode> movies) {
+        return movies.stream()
                 .filter(Objects::nonNull)
+                .map(this::toMovieModelIfNew)
                 .toList();
     }
 
-    private MovieModel toMovieIfNew(JsonNode node) {
-        long metadataId = node.get("id").asLong();
-        String originalName = node.get("original_name").asText();
+    private MovieModel toMovieModelIfNew(JsonNode movieNode) {
+        long metadataId = movieNode.get("id").asLong();
+        String originalName = movieNode.get("original_name").asText();
 
-        // Skip if existed
-        if (movieRepository.existsBySearchTitleIgnoreCase(originalName.toLowerCase())) return null;
-        if (movieRepository.existsByMetadataId(metadataId)) return null;
+        if (this.movieRepository.existsByMetadataId(metadataId)) return null;
+        if (this.movieRepository.existsBySearchTitleIgnoreCase(originalName)) return null;
 
-        // Extract release year from first_air_date
-        LocalDate airDate = LocalDate.parse(node.get("first_air_date").asText());
-        int releaseYear = airDate.getYear();
+        LocalDate releaseDate = LocalDate.parse(movieNode.get("first_air_date").asText());
 
-        MovieModel movie = new MovieModel();
-        movie.setSearchTitle(originalName);
-//        movie.setMetadataId(metadataId);
-        movie.setReleaseYear(releaseYear);
-
-        return movie;
+        return MovieModel.builder()
+                .metadataId(metadataId)
+                .searchTitle(originalName)
+                .releaseYear(releaseDate.getYear())
+                .build();
     }
 
     private void saveMovies(List<MovieModel> movies) {
-        if (!movies.isEmpty()) {
-            movieRepository.saveAll(movies);
-        }
+        if (movies.isEmpty()) return;
+
+        this.movieRepository.saveAll(movies);
+        log.info("[{}] Movies saved", movies.size());
     }
 }
