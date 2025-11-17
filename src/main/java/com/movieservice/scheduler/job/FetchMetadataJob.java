@@ -7,6 +7,7 @@ import com.movieservice.service.MovieService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,6 +15,9 @@ import java.util.List;
 @Component
 @Slf4j
 public class FetchMetadataJob extends BaseJob {
+
+    @Value("${config.metadata.maxRetry}")
+    private Integer maxRetry;
 
     private final MovieRepository movieRepository;
 
@@ -30,13 +34,14 @@ public class FetchMetadataJob extends BaseJob {
 
     @Override
     public Result executeJob(JobExecutionContext context) {
-        List<MovieModel> moviesWithoutMetadata = movieRepository.findAllByMetadataIdIsNull();
+        List<MovieModel> moviesWithoutMetadata = movieRepository.findAllByFetchTimeLessThanAndMetadataIdIsNull(maxRetry);
         int success = 0;
         int fail = 0;
 
         for (MovieModel movie : moviesWithoutMetadata) {
             try {
                 movieService.fetchMetadata(movie);
+                movieRepository.incrementFetchTime(movie.getId());
                 success++;
             } catch (Exception ex) {
                 log.error("Failed to publish metadata request for movie id={} title={}",

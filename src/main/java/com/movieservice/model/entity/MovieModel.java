@@ -27,6 +27,9 @@ public class MovieModel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     protected Long id;
 
+    @Column(unique = true, name = "tmdb_id")
+    protected Integer tmdbId;
+
     @Column(name = "search_title")
     private String searchTitle;
 
@@ -63,6 +66,9 @@ public class MovieModel {
     @Column(name = "last_modified_date")
     @LastModifiedDate
     protected LocalDateTime lastModifiedDate;
+
+    @Column(name = "fetch_time")
+    protected Integer fetchTime;
 
     @PrePersist
     protected void onCreate() {

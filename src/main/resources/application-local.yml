@@ -34,13 +34,13 @@ quartz:
       name: "FetchPopularMovie"
       group: "daily"
       description: "Job starts at 00:05 AM VNT to get popular movies from TMDb"
-      cron-expression: "0 15 0 * * ?"
+      cron-expression: "0 24 0 * * ?"
       time-zone: "Asia/Ho_Chi_Minh"
     fetch-metadata-job:
       name: "FetchMetadataJob"
       group: "daily"
       description: "Job starts at 00:30 AM VNT to fetch metadata of movie which doesn't have metadata"
-      cron-expression: "0 20 0 * * ?"
+      cron-expression: "0 26 0 * * ?"
       time-zone: "Asia/Ho_Chi_Minh"
 
 config:
@@ -54,6 +54,8 @@ config:
   tmdb:
     base-url: https://api.themoviedb.org/3
     token: ${TMDB_TOKEN}
+  metadata:
+    maxRetry: 3
 
 connector:
   alb:

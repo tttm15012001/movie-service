@@ -1,0 +1,2 @@
+ALTER TABLE movie ADD COLUMN fetch_time BIGINT;
+ALTER TABLE movie ADD COLUMN tmdb_id BIGINT;

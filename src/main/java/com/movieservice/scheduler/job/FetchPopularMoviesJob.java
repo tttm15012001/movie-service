@@ -51,7 +51,7 @@ public class FetchPopularMoviesJob extends BaseJob {
                 .thenApply(this::toMovieModelList)
                 .thenAccept(this::saveMovies)
                 .exceptionally(err -> {
-                    log.error("[{}] Error while fetching movies", context.getJobDetail().getKey().getName());
+                    log.error("[{}] Error while fetching movies", context.getJobDetail().getKey().getName(), err);
                     return null;
                 });
 
@@ -95,18 +95,19 @@ public class FetchPopularMoviesJob extends BaseJob {
     }
 
     private MovieModel toMovieModelIfNew(JsonNode movieNode) {
-        long metadataId = movieNode.get("id").asLong();
+        int tmdbId = movieNode.get("id").asInt();
         String originalName = movieNode.get("original_name").asText();
 
-        if (this.movieRepository.existsByMetadataId(metadataId)) return null;
+        if (this.movieRepository.existsByTmdbId(tmdbId)) return null;
         if (this.movieRepository.existsBySearchTitleIgnoreCase(originalName)) return null;
 
         LocalDate releaseDate = LocalDate.parse(movieNode.get("first_air_date").asText());
 
         return MovieModel.builder()
-                .metadataId(metadataId)
+                .tmdbId(tmdbId)
                 .searchTitle(originalName)
                 .releaseYear(releaseDate.getYear())
+                .fetchTime(0)
                 .build();
     }
 

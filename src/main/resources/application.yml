@@ -54,6 +54,8 @@ config:
   tmdb:
     base-url: https://api.themoviedb.org/3
     token: ${TMDB_TOKEN}
+  metadata:
+    maxRetry: 3
 
 connector:
   alb:
