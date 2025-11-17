@@ -89,8 +89,8 @@ public class FetchPopularMoviesJob extends BaseJob {
 
     private List<MovieModel> toMovieModelList(List<JsonNode> movies) {
         return movies.stream()
-                .filter(Objects::nonNull)
                 .map(this::toMovieModelIfNew)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
