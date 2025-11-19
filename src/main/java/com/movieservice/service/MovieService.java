@@ -24,4 +24,6 @@ public interface MovieService {
     ResponseEntity<ManifestResponseDto> getManifestFromMovieName(String movieName) throws Exception;
 
     Flux<CategoryWithMoviesResponseDto> getTopMoviesFromCateList(List<CategoryModel> categories);
+
+    void incrementFetchTime(Long id);
 }

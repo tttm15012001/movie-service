@@ -30,7 +30,7 @@ public class MovieModel {
     @Column(unique = true, name = "tmdb_id")
     protected Integer tmdbId;
 
-    @Column(name = "search_title")
+    @Column(name = "search_title", unique = true)
     private String searchTitle;
 
     @Column(name = "title")

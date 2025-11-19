@@ -31,7 +31,14 @@ public class FetchPopularMoviesJob extends BaseJob {
     @Value("${config.tmdb.token}")
     private String tmdbToken;
 
+    @Value("${config.crawl.current-year}")
+    private Integer currentYear;
+
+    @Value("${config.crawl.page-limit}")
+    private int pageLimit;
+
     private final MovieRepository movieRepository;
+
     private final ObjectMapper objectMapper;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -47,19 +54,28 @@ public class FetchPopularMoviesJob extends BaseJob {
     public Result executeJob(JobExecutionContext context) {
         log.info("[{}] Executing job", context.getJobDetail().getKey().getName());
 
-        fetchPopularMoviesAsync()
-                .thenApply(this::toMovieModelList)
-                .thenAccept(this::saveMovies)
+        CompletableFuture<?>[] futures = new CompletableFuture[pageLimit];
+
+        for (int page = 1; page <= pageLimit; page++) {
+            futures[page - 1] =
+                    fetchPopularMoviesAsync(page)
+                            .thenApply(this::toMovieModelList)
+                            .thenAccept(this::saveMovies);
+        }
+
+        CompletableFuture.allOf(futures)
                 .exceptionally(err -> {
-                    log.error("[{}] Error while fetching movies", context.getJobDetail().getKey().getName(), err);
+                    log.error("[{}] Error fetching TMDB pages",
+                            context.getJobDetail().getKey().getName(), err);
                     return null;
-                });
+                })
+                .thenRun(() -> log.info("Completed fetching {} TMDB pages", pageLimit));
 
         return new Result(0, 0, 0, 0);
     }
 
-    private CompletableFuture<List<JsonNode>> fetchPopularMoviesAsync() {
-        String url = baseUrl + "/tv/popular?language=en-US&page=1";
+    private CompletableFuture<List<JsonNode>> fetchPopularMoviesAsync(int page) {
+        String url = baseUrl + "/trending/tv/week?language=en-US&page=" + page;
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .header("Authorization", "Bearer " + tmdbToken)
@@ -98,10 +114,8 @@ public class FetchPopularMoviesJob extends BaseJob {
         int tmdbId = movieNode.get("id").asInt();
         String originalName = movieNode.get("original_name").asText();
 
-        if (this.movieRepository.existsByTmdbId(tmdbId)) return null;
-        if (this.movieRepository.existsBySearchTitleIgnoreCase(originalName)) return null;
-
         LocalDate releaseDate = LocalDate.parse(movieNode.get("first_air_date").asText());
+        if (releaseDate.getYear() != currentYear) return null;
 
         return MovieModel.builder()
                 .tmdbId(tmdbId)
@@ -112,9 +126,16 @@ public class FetchPopularMoviesJob extends BaseJob {
     }
 
     private void saveMovies(List<MovieModel> movies) {
-        if (movies.isEmpty()) return;
-
-        this.movieRepository.saveAll(movies);
-        log.info("[{}] Movies saved", movies.size());
+        for (MovieModel movie : movies) {
+            try {
+                movieRepository.save(movie);
+            } catch (Exception ex) {
+                if (ex.getMessage().contains("tmdb_id")) {
+                    log.warn("Duplicate movie ignored: tmdbId={}", movie.getTmdbId());
+                } else {
+                    log.error("Error saving movie {}", movie.getTmdbId(), ex);
+                }
+            }
+        }
     }
 }

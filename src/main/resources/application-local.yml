@@ -51,6 +51,7 @@ config:
   crawl:
     current-year: 2025
     key: MYIBWPKZBWXPR9VK16O8H0OJT9RVS5ZG
+    page-limit: 3
   tmdb:
     base-url: https://api.themoviedb.org/3
     token: ${TMDB_TOKEN}

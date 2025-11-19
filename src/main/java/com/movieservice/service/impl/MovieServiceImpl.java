@@ -19,6 +19,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -195,6 +196,12 @@ public class MovieServiceImpl implements MovieService {
                             .movies(Collections.emptyList())
                             .build()))
             );
+    }
+
+    @Transactional
+    @Override
+    public void incrementFetchTime(Long id) {
+        movieRepository.incrementFetchTime(id);
     }
 
     private Flux<List<MovieResponseDto>> getMoviesFlux(Long categoryId, int limit) {

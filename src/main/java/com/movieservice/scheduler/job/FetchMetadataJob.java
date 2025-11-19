@@ -41,7 +41,7 @@ public class FetchMetadataJob extends BaseJob {
         for (MovieModel movie : moviesWithoutMetadata) {
             try {
                 movieService.fetchMetadata(movie);
-                movieRepository.incrementFetchTime(movie.getId());
+                movieService.incrementFetchTime(movie.getId());
                 success++;
             } catch (Exception ex) {
                 log.error("Failed to publish metadata request for movie id={} title={}",
