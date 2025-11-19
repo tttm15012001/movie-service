@@ -26,9 +26,8 @@ public class CategoryModel {
     @Column(name = "name")
     protected String name;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "code")
-    protected CategoryEnum code;
+    protected String code;
 
     @Column(name = "score")
     protected Float score;

@@ -1,18 +1,7 @@
 package com.movieservice.model.entity;
 
 import com.movieservice.dto.response.MovieResponseDto;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Column;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +11,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static com.movieservice.common.constant.DatabaseConstants.TABLE_MOVIE;
 
@@ -37,17 +27,23 @@ public class MovieModel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     protected Long id;
 
-    @Column(name = "search_title")
+    @Column(unique = true, name = "tmdb_id")
+    protected Integer tmdbId;
+
+    @Column(name = "search_title", unique = true)
     private String searchTitle;
+
+    @Column(name = "title")
+    private String title;
+
+    @Column(name = "backdrop")
+    private String backdrop;
 
     @Column(name = "release_year")
     protected Integer releaseYear;
 
     @Column(name = "metadata_id")
     private Long metadataId;
-
-    @Column(name = "number_of_episodes")
-    private Integer numberOfEpisodes;
 
     @Column(name = "vote_average")
     protected Double voteAverage;
@@ -60,6 +56,9 @@ public class MovieModel {
     )
     private List<CategoryModel> categories;
 
+    @Column(name = "primary_category_id")
+    private Long primaryCategoryId;
+
     @Column(name = "created_date", nullable = false, updatable = false)
     @CreatedDate
     protected LocalDateTime createdDate;
@@ -67,6 +66,9 @@ public class MovieModel {
     @Column(name = "last_modified_date")
     @LastModifiedDate
     protected LocalDateTime lastModifiedDate;
+
+    @Column(name = "fetch_time")
+    protected Integer fetchTime;
 
     @PrePersist
     protected void onCreate() {
@@ -81,15 +83,17 @@ public class MovieModel {
     public MovieResponseDto toMovieResponseDto() {
         return MovieResponseDto.builder()
                 .id(this.getId())
-                .searchTitle(this.getSearchTitle())
+                .title(this.getTitle())
+                .backdrop(this.getBackdrop())
                 .releaseYear(this.getReleaseYear())
                 .voteAverage(this.getVoteAverage())
                 .metadataId(this.getMetadataId())
-                .numberOfEpisodes(this.getNumberOfEpisodes())
-                .categories(this.categories != null
+                .primaryCategory(this.getPrimaryCategoryId())
+                .categories(
+                    this.categories != null
                         ? this.categories.stream()
-                            .map(CategoryModel::getName)
-                            .toList()
+                        .map(c -> Map.of(c.getId(), c.getName()))
+                        .toList()
                         : List.of())
                 .build();
     }

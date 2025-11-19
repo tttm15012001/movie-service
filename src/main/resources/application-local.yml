@@ -27,6 +27,22 @@ spring:
     listener:
       missing-topics-fatal: false
 
+quartz:
+  max-retry: 3
+  job:
+    fetch-popular-movies:
+      name: "FetchPopularMovie"
+      group: "daily"
+      description: "Job starts at 00:05 AM VNT to get popular movies from TMDb"
+      cron-expression: "0 24 0 * * ?"
+      time-zone: "Asia/Ho_Chi_Minh"
+    fetch-metadata-job:
+      name: "FetchMetadataJob"
+      group: "daily"
+      description: "Job starts at 00:30 AM VNT to fetch metadata of movie which doesn't have metadata"
+      cron-expression: "0 26 0 * * ?"
+      time-zone: "Asia/Ho_Chi_Minh"
+
 config:
   category:
     top: 3
@@ -34,6 +50,13 @@ config:
       top: 10
   crawl:
     current-year: 2025
+    key: MYIBWPKZBWXPR9VK16O8H0OJT9RVS5ZG
+    page-limit: 3
+  tmdb:
+    base-url: https://api.themoviedb.org/3
+    token: ${TMDB_TOKEN}
+  metadata:
+    maxRetry: 3
 
 connector:
   alb:

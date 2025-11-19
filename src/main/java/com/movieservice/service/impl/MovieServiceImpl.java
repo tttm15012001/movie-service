@@ -1,7 +1,6 @@
 package com.movieservice.service.impl;
 
 import com.movieservice.connector.MetadataServiceConnector;
-import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.ManifestResponseDto;
 import com.movieservice.dto.response.MovieResponseDto;
@@ -10,7 +9,6 @@ import com.movieservice.model.entity.MovieModel;
 import com.movieservice.repository.CategoryRepository;
 import com.movieservice.repository.MovieRepository;
 import com.movieservice.service.MovieService;
-import com.movieservice.utils.StringUtil;
 import com.movieservice.validation.exception.NotFoundException;
 import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +17,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -33,12 +33,10 @@ import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static com.movieservice.common.constant.DatabaseConstants.TABLE_MOVIE;
+import static com.movieservice.common.constant.KafkaTopicConstants.TOPIC_MOVIE_CRAWL_REQUEST;
 
 @Service
 @Slf4j
@@ -61,18 +59,18 @@ public class MovieServiceImpl implements MovieService {
 
     private final MovieRepository movieRepository;
 
-    private final CategoryRepository categoryRepository;
-
     private final MetadataServiceConnector metadataServiceConnector;
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public MovieServiceImpl(
             MovieRepository movieRepository,
-            CategoryRepository categoryRepository,
-            MetadataServiceConnector metadataServiceConnector
+            MetadataServiceConnector metadataServiceConnector,
+            KafkaTemplate<String, Object> kafkaTemplate
     ) {
         this.movieRepository = movieRepository;
-        this.categoryRepository = categoryRepository;
         this.metadataServiceConnector = metadataServiceConnector;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Override
@@ -110,19 +108,16 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    public MovieResponseDto createMovie(MovieRequest movieRequest) {
-        List<CategoryModel> categoryModels = movieRequest.getCategories().stream()
-            .map(code -> categoryRepository.findByCode(code)
-                .orElseThrow(() -> new NotFoundException("category", code.toString())))
-            .toList();
+    public void fetchMetadata(MovieModel movie) {
+        Map<String, Object> payload = Map.of(
+                "movieId", movie.getId(),
+                "title", movie.getSearchTitle(),
+                "originalLanguage", "",
+                "releaseYear", movie.getReleaseYear(),
+                "requestedAt", Instant.now().toString()
+        );
 
-        MovieModel movieModel = MovieModel.builder()
-                .searchTitle(movieRequest.getSearchTitle())
-                .releaseYear(movieRequest.getReleaseYear())
-                .categories(categoryModels)
-                .build();
-
-        return this.movieRepository.save(movieModel).toMovieResponseDto();
+        kafkaTemplate.send(TOPIC_MOVIE_CRAWL_REQUEST, movie.getSearchTitle(), payload);
     }
 
     @Override
@@ -203,9 +198,15 @@ public class MovieServiceImpl implements MovieService {
             );
     }
 
+    @Transactional
+    @Override
+    public void incrementFetchTime(Long id) {
+        movieRepository.incrementFetchTime(id);
+    }
+
     private Flux<List<MovieResponseDto>> getMoviesFlux(Long categoryId, int limit) {
         return Mono.fromCallable(() ->
-            movieRepository.findTopByCategoryOrderByRateScoreDesc(categoryId, PageRequest.of(0, limit))
+            movieRepository.findByPrimaryCategoryIdOrderByVoteAverageDesc(categoryId, PageRequest.of(0, limit))
                 .stream()
                 .map(MovieModel::toMovieResponseDto)
                 .toList()

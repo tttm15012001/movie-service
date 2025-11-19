@@ -3,6 +3,7 @@ package com.movieservice.messaging.producer;
 import com.movieservice.dto.request.CrawlMovieRequest;
 import com.movieservice.model.entity.MovieModel;
 import com.movieservice.repository.MovieRepository;
+import com.movieservice.service.MovieService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -19,19 +20,19 @@ import static com.movieservice.common.constant.KafkaTopicConstants.TOPIC_MOVIE_C
 @Slf4j
 public class CrawlMovieRequestProducer {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-
     private final MovieRepository movieRepository;
+
+    private final MovieService movieService;
 
     @Value("${config.crawl.current-year}")
     private Integer currentYear;
 
     public CrawlMovieRequestProducer(
-        KafkaTemplate<String, Object> kafkaTemplate,
-        MovieRepository movieRepository
+        MovieRepository movieRepository,
+        MovieService movieService
     ) {
-        this.kafkaTemplate = kafkaTemplate;
         this.movieRepository = movieRepository;
+        this.movieService = movieService;
     }
 
     public void sendCrawlRequest(List<CrawlMovieRequest> crawlMovieRequests) {
@@ -50,15 +51,7 @@ public class CrawlMovieRequestProducer {
                         ? this.saveNewMovie(searchTitle, releaseYear)
                         : movieRepository.findBySearchTitleIgnoreCase(searchTitle).orElseThrow();
 
-                Map<String, Object> payload = Map.of(
-                        "movieId", movie.getId(),
-                        "title", searchTitle,
-                        "originalLanguage", request.getOriginalLanguage(),
-                        "releaseYear", releaseYear,
-                        "requestedAt", Instant.now().toString()
-                );
-
-                kafkaTemplate.send(TOPIC_MOVIE_CRAWL_REQUEST, searchTitle, payload);
+                this.movieService.fetchMetadata(movie);
                 log.info("[{}] - Sent crawl request (movieId = {})", request.getTitle(), movie.getId());
             } else {
                 log.info("[{}] - Already have metadata", request.getTitle());

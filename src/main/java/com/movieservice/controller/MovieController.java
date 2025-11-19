@@ -2,7 +2,6 @@ package com.movieservice.controller;
 
 import com.movieservice.api.MovieApi;
 import com.movieservice.dto.request.CrawlMovieRequest;
-import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.CrawlMovieResponse;
 import com.movieservice.dto.response.ManifestResponseDto;
@@ -52,11 +51,6 @@ public class MovieController implements MovieApi {
         this.movieService = movieService;
         this.categoryService = categoryService;
         this.crawlMovieProducer = crawlMovieProducer;
-    }
-
-    @Override
-    public MovieResponseDto createMovie(@RequestBody MovieRequest movieRequest) {
-        return this.movieService.createMovie(movieRequest);
     }
 
     @Override

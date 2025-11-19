@@ -1,0 +1,1 @@
+ALTER TABLE movie ADD COLUMN primary_category_id BIGINT;

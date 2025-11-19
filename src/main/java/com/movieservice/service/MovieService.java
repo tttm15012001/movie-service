@@ -1,6 +1,5 @@
 package com.movieservice.service;
 
-import com.movieservice.dto.request.MovieRequest;
 import com.movieservice.dto.response.CategoryWithMoviesResponseDto;
 import com.movieservice.dto.response.ManifestResponseDto;
 import com.movieservice.dto.response.MovieResponseDto;
@@ -20,9 +19,11 @@ public interface MovieService {
 
     Optional<MovieResponseDto> getMovieDetailById(Long movieId);
 
-    MovieResponseDto createMovie(MovieRequest movieRequest);
+    void fetchMetadata(MovieModel movie);
 
     ResponseEntity<ManifestResponseDto> getManifestFromMovieName(String movieName) throws Exception;
 
     Flux<CategoryWithMoviesResponseDto> getTopMoviesFromCateList(List<CategoryModel> categories);
+
+    void incrementFetchTime(Long id);
 }

@@ -3,6 +3,7 @@ package com.movieservice.repository;
 import com.movieservice.model.entity.MovieModel;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,10 +24,10 @@ public interface MovieRepository extends JpaRepository<MovieModel, Long> {
     @Query("""
         SELECT DISTINCT m FROM MovieModel m
         JOIN FETCH m.categories c
-        WHERE c.id = :categoryId
+        WHERE m.primaryCategoryId = :categoryId
         ORDER BY m.voteAverage DESC
     """)
-    List<MovieModel> findTopByCategoryOrderByRateScoreDesc(
+    List<MovieModel> findByPrimaryCategoryIdOrderByVoteAverageDesc(
             @Param("categoryId") Long categoryId,
             Pageable pageable
     );
@@ -38,4 +39,14 @@ public interface MovieRepository extends JpaRepository<MovieModel, Long> {
     Set<String> findAllSearchTitlesHasNoMetadata();
 
     Optional<MovieModel> findBySearchTitleIgnoreCase(String title);
+
+    List<MovieModel> findAllByFetchTimeLessThanAndMetadataIdIsNull(int maxRetry);
+
+    @Modifying
+    @Query("UPDATE MovieModel m SET m.fetchTime = m.fetchTime + 1 WHERE m.id = :id")
+    void incrementFetchTime(@Param("id") Long id);
+
+    boolean existsBySearchTitleIgnoreCase(String searchTitle);
+
+    boolean existsByTmdbId(int tmdbId);
 }

@@ -15,4 +15,6 @@ public interface CategoryRepository extends JpaRepository<CategoryModel, Long> {
     List<CategoryModel> findAllByOrderByScoreDesc(Pageable pageable);
 
     Optional<CategoryModel> findByCode(CategoryEnum code);
+
+    Optional<CategoryModel> findByCodeIgnoreCase(String code);
 }
