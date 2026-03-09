@@ -10,4 +10,6 @@ public class ApiConstant {
     public final static String METADATA_CONNECTOR_PATH = "/metadata";
 
     public final static String USER_API_URL = "/user";
+
+    public final static Integer DEFAULT_SIZE_PER_PAGE = 5;
 }

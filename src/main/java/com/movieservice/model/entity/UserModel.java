@@ -1,5 +1,6 @@
 package com.movieservice.model.entity;
 
+import com.movieservice.dto.response.UserDtoResponse;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.Entity;
@@ -36,4 +37,11 @@ public class UserModel {
     @Column(name = "role")
     @Enumerated(EnumType.STRING)
     private RoleEnum role;
+
+    public UserDtoResponse toUserDtoResponse() {
+        return UserDtoResponse.builder()
+                .email(this.email)
+                .role(RoleEnum.getRoleByCode(this.role.toString()))
+                .build();
+    }
 }
